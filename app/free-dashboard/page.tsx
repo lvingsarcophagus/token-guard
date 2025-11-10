@@ -81,6 +81,7 @@ export default function FreeDashboard() {
   const [isInWatchlistState, setIsInWatchlistState] = useState(false)
   const [watchlistLoading, setWatchlistLoading] = useState(false)
   const [justScanned, setJustScanned] = useState(false) // Track fresh scans
+  const [showPreviousScans, setShowPreviousScans] = useState(false) // Track if user wants to see previous scans
 
   // Mock token data for demonstration - replace with actual recent scan data
   const [selectedToken, setSelectedToken] = useState<any>(null)
@@ -532,15 +533,17 @@ export default function FreeDashboard() {
   }
 
 
-  // Get most recent scan for detailed view (only if we haven't just scanned)
+  // Get most recent scan for detailed view (only if we haven't just scanned AND user wants to see it)
   useEffect(() => {
     console.log('[Dashboard] useEffect check:', { 
       hasStats: !!stats?.recentScans?.length, 
       hasSelectedToken: !!selectedToken,
-      justScanned 
+      justScanned,
+      showPreviousScans
     })
     
-    if (stats?.recentScans && stats.recentScans.length > 0 && !selectedToken && !justScanned) {
+    // Only auto-load if user explicitly wants to see previous scans
+    if (stats?.recentScans && stats.recentScans.length > 0 && !selectedToken && !justScanned && showPreviousScans) {
       const latest = stats.recentScans[0]
       console.log('[Dashboard] Loading latest scan from Firebase:', latest)
       console.log('[Dashboard] Latest scan risk score:', latest.results.overall_risk_score)
@@ -578,7 +581,7 @@ export default function FreeDashboard() {
         rawData: latest.results
       })
     }
-  }, [stats, selectedToken, justScanned])
+  }, [stats, selectedToken, justScanned, showPreviousScans])
 
   const getRiskColor = (score: number) => {
     if (score <= 30) return 'bg-green-500'
@@ -1243,7 +1246,17 @@ export default function FreeDashboard() {
           {/* Recent Analysis Chart */}
           <div className="border border-white/20 bg-black/60 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-white font-mono text-sm tracking-wider">RECENT SCANS</h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-white font-mono text-sm tracking-wider">RECENT SCANS</h3>
+                {stats?.recentScans && stats.recentScans.length > 0 && !selectedToken && (
+                  <button
+                    onClick={() => setShowPreviousScans(true)}
+                    className="px-3 py-1 border border-white/30 text-white hover:bg-white hover:text-black transition-all font-mono text-[10px] uppercase tracking-wider"
+                  >
+                    VIEW LATEST
+                  </button>
+                )}
+              </div>
               <Clock className="w-4 h-4 text-white/40" />
             </div>
             
