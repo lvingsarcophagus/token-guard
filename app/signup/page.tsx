@@ -5,19 +5,24 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { createUserWithEmailAndPassword } from "firebase/auth"
-import { doc, setDoc } from "firebase/firestore"
+import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
+import { doc, setDoc, getDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Shield } from "lucide-react"
 import { theme } from "@/lib/theme"
+import { analyticsEvents } from "@/lib/firebase-analytics"
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [name, setName] = useState("")
+  const [company, setCompany] = useState("")
+  const [country, setCountry] = useState("")
+  const [agreeToTerms, setAgreeToTerms] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
@@ -27,22 +32,66 @@ export default function SignUpPage() {
     setLoading(true)
     setError("")
 
+    // Validation
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
+      setLoading(false)
+      return
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long")
+      setLoading(false)
+      return
+    }
+
+    if (!agreeToTerms) {
+      setError("You must agree to the Terms of Service and Privacy Policy")
+      setLoading(false)
+      return
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
 
-      // Create user profile in Firestore
+      // Create user profile in Firestore with enhanced data
       await setDoc(doc(db, "users", userCredential.user.uid), {
         uid: userCredential.user.uid,
         email,
         name,
-        tier: "free",
+        company: company || null,
+        country: country || null,
+        tier: "FREE",
+        plan: "FREE",
+        usage: {
+          tokensAnalyzed: 0,
+          lastResetDate: new Date(),
+          dailyLimit: 10
+        },
         dailyAnalyses: 0,
+        totalAnalyses: 0,
         watchlist: [],
         alerts: [],
+        preferences: {
+          emailNotifications: true,
+          riskAlerts: true,
+          priceAlerts: false
+        },
+        metadata: {
+          signupSource: "web",
+          userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
+          signupIp: null // Can be populated via server-side API
+        },
         createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       })
 
-      router.push("/dashboard")
+      // Track signup event
+      analyticsEvents.signup('email')
+      
+      // Redirect to free dashboard
+      router.push("/free-dashboard")
     } catch (error: unknown) {
       console.error("Sign up failed:", error)
       const err = error as { code?: string; message?: string }
@@ -63,6 +112,77 @@ export default function SignUpPage() {
           break
         default:
           setError(err.message || "Sign up failed. Please try again.")
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleSignUp = async () => {
+    setLoading(true)
+    setError("")
+
+    try {
+      const provider = new GoogleAuthProvider()
+      const result = await signInWithPopup(auth, provider)
+      const user = result.user
+
+      // Check if user already exists in Firestore
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+      
+      if (!userDoc.exists()) {
+        // Create user profile in Firestore for new Google users
+        await setDoc(doc(db, "users", user.uid), {
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || "",
+          company: null,
+          country: null,
+          tier: "FREE",
+          plan: "FREE",
+          usage: {
+            tokensAnalyzed: 0,
+            lastResetDate: new Date(),
+            dailyLimit: 10
+          },
+          dailyAnalyses: 0,
+          totalAnalyses: 0,
+          watchlist: [],
+          alerts: [],
+          preferences: {
+            emailNotifications: true,
+            riskAlerts: true,
+            priceAlerts: false
+          },
+          metadata: {
+            signupSource: "google",
+            userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
+            signupIp: null
+          },
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+
+        // Track signup event
+        analyticsEvents.signup('google')
+      } else {
+        // Track login event for existing users
+        analyticsEvents.login('google')
+      }
+      
+      // Redirect to free dashboard
+      router.push("/free-dashboard")
+    } catch (error: unknown) {
+      console.error("Google sign up failed:", error)
+      const err = error as { code?: string; message?: string }
+      
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError("Sign up cancelled")
+      } else if (err.code === 'auth/popup-blocked') {
+        setError("Popup was blocked. Please allow popups for this site.")
+      } else {
+        setError(err.message || "Google sign up failed. Please try again.")
       }
     } finally {
       setLoading(false)
@@ -108,39 +228,71 @@ export default function SignUpPage() {
         )}
 
         <form onSubmit={handleSignUp} className="space-y-4">
-          <div>
-            <Label htmlFor="name" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
-              Full Name
-            </Label>
-            <Input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={`mt-1 ${theme.inputs.default}`}
-              placeholder="John Doe"
-              required
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="name" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
+                Full Name *
+              </Label>
+              <Input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={`mt-1 ${theme.inputs.default}`}
+                placeholder="John Doe"
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="company" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
+                Company (Optional)
+              </Label>
+              <Input
+                id="company"
+                type="text"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className={`mt-1 ${theme.inputs.default}`}
+                placeholder="Acme Inc."
+              />
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="email" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
-              Email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={`mt-1 ${theme.inputs.default}`}
-              placeholder="you@example.com"
-              required
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="email" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
+                Email *
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={`mt-1 ${theme.inputs.default}`}
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="country" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
+                Country (Optional)
+              </Label>
+              <Input
+                id="country"
+                type="text"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className={`mt-1 ${theme.inputs.default}`}
+                placeholder="United States"
+              />
+            </div>
           </div>
 
           <div>
             <Label htmlFor="password" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
-              Password
+              Password *
             </Label>
             <Input
               id="password"
@@ -152,16 +304,94 @@ export default function SignUpPage() {
               required
               minLength={8}
             />
+            <p className={`mt-1 ${theme.text.tiny} ${theme.text.secondary} ${theme.fonts.mono}`}>
+              Minimum 8 characters
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="confirmPassword" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
+              Confirm Password *
+            </Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className={`mt-1 ${theme.inputs.default}`}
+              placeholder="••••••••"
+              required
+              minLength={8}
+            />
+          </div>
+
+          <div className="flex items-start gap-3 pt-2">
+            <input
+              type="checkbox"
+              id="terms"
+              checked={agreeToTerms}
+              onChange={(e) => setAgreeToTerms(e.target.checked)}
+              className="mt-1 w-4 h-4 border border-white/30 bg-black/50 checked:bg-white checked:border-white cursor-pointer"
+              required
+            />
+            <Label htmlFor="terms" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.tiny} leading-relaxed cursor-pointer`}>
+              I agree to the{" "}
+              <Link href="/terms" className={`${theme.text.primary} hover:underline`} target="_blank">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className={`${theme.text.primary} hover:underline`} target="_blank">
+                Privacy Policy
+              </Link>
+            </Label>
           </div>
 
           <Button
             type="submit"
             disabled={loading}
-            className={`w-full ${theme.buttons.primary} uppercase`}
+            className={`w-full ${theme.buttons.primary} uppercase mt-6`}
           >
-            {loading ? "CREATING..." : "SIGN UP"}
+            {loading ? "CREATING ACCOUNT..." : "CREATE ACCOUNT"}
           </Button>
         </form>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4 my-6">
+          <div className="flex-1 h-px bg-white/20"></div>
+          <span className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.tiny} uppercase`}>
+            OR
+          </span>
+          <div className="flex-1 h-px bg-white/20"></div>
+        </div>
+
+        {/* Google Sign Up Button */}
+        <Button
+          type="button"
+          onClick={handleGoogleSignUp}
+          disabled={loading}
+          variant="outline"
+          className="w-full border-2 border-white/20 hover:border-white/40 hover:bg-white/10 text-white font-mono tracking-wider uppercase flex items-center justify-center gap-3"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <path
+              fill="currentColor"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="currentColor"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="currentColor"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+            />
+            <path
+              fill="currentColor"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+            />
+          </svg>
+          {loading ? "SIGNING UP..." : "SIGN UP WITH GOOGLE"}
+        </Button>
 
         <div className={`mt-6 text-center ${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small}`}>
           Already have an account?{" "}

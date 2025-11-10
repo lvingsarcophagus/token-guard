@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import { getUserProfile, createUserProfile, updateUserPlan } from "@/lib/services/firestore-service"
 import { migrateUserSchema } from "@/lib/services/migration-service"
+import { initializeUserTracking, clearUserTracking } from "@/lib/firebase-analytics"
 import type { UserDocument } from "@/lib/firestore-schema"
 
 interface UserData {
@@ -73,6 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 ? profile.createdAt.toISOString() 
                 : (profile.createdAt as any)?.toDate?.()?.toISOString() || new Date().toISOString(),
             })
+            
+            // Initialize analytics tracking for this user
+            initializeUserTracking(user.uid, {
+              email: user.email || '',
+              plan: profile.plan,
+              createdAt: profile.createdAt instanceof Date 
+                ? profile.createdAt.toISOString() 
+                : (profile.createdAt as any)?.toDate?.()?.toISOString() || new Date().toISOString(),
+            })
           } else {
             // Create new user profile
             try {
@@ -136,6 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[Auth Context] No user logged in')
           setUserData(null)
           setUserProfile(null)
+          // Clear analytics tracking on logout
+          clearUserTracking()
         }
       } catch (error) {
         console.error('[Auth Context] Auth state change error:', error)

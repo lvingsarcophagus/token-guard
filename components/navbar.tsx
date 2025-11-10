@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { signOut } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { Button } from "./ui/button"
+import { analyticsEvents } from "@/lib/firebase-analytics"
 
 export default function Navbar() {
   const pathname = usePathname()
@@ -17,10 +18,31 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     try {
+      // Track logout event before signing out
+      analyticsEvents.logout()
+      
+      // Sign out from Firebase
       await signOut(auth)
-      router.push("/") // Redirect to landing page
+      
+      // Clear any local storage/session data
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('lastVisitedPath')
+        sessionStorage.clear()
+      }
+      
+      // Force redirect to landing page with replace to prevent back navigation
+      router.replace("/")
+      
+      // Force a hard reload after a short delay to clear all state
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.location.href = "/"
+        }
+      }, 100)
     } catch (error) {
       console.error("Logout error:", error)
+      // Even if logout fails, redirect to landing page
+      router.replace("/")
     }
   }
 

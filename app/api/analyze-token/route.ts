@@ -301,37 +301,57 @@ export async function POST(req: NextRequest) {
 
     // Calculate risk using appropriate algorithm
     let result: any
-    if (USE_MULTICHAIN_ALGORITHM) {
-      // Fetch behavioral data in parallel
-      console.log('[Multi-Chain] Fetching behavioral data...')
-      const behavioralData = await fetchBehavioralData(tokenAddress, chainId)
-      
-      // Build multi-chain enhanced data
-      const enhancedData: MultiChainTokenData = {
-        ...adaptToEnhancedFormat(tokenData, goplusData, tokenAddress, chainId),
-        ...behavioralData
+    try {
+      if (USE_MULTICHAIN_ALGORITHM) {
+        // Fetch behavioral data in parallel
+        console.log('[Multi-Chain] Fetching behavioral data...')
+        const behavioralData = await fetchBehavioralData(tokenAddress, chainId)
+        
+        // Build multi-chain enhanced data
+        const enhancedData: MultiChainTokenData = {
+          ...adaptToEnhancedFormat(tokenData, goplusData, tokenAddress, chainId),
+          ...behavioralData
+        }
+        
+        console.log('🔍 Multi-Chain Enhanced Data INPUT:', JSON.stringify({
+          tokenAddress: enhancedData.tokenAddress,
+          chainId: enhancedData.chainId,
+          hasGoPlusData: enhancedData.hasGoPlusData,
+          marketCap: enhancedData.marketCap,
+          holderCount: enhancedData.holderCount,
+          liquidityUSD: enhancedData.liquidityUSD,
+          hasBehavioralData: !!enhancedData.holderHistory,
+          // Truncate large arrays for logging
+          lp_holders: enhancedData.lp_holders ? `[${enhancedData.lp_holders.length} holders]` : undefined
+        }))
+        
+        const enhancedResult = calculateMultiChainTokenRisk(enhancedData)
+        console.log('🔍 Multi-Chain Result RAW:', {
+          overall_risk_score: enhancedResult.overall_risk_score,
+          risk_level: enhancedResult.risk_level,
+          confidence_score: enhancedResult.confidence_score,
+          data_tier: enhancedResult.data_tier,
+          critical_flags: enhancedResult.critical_flags?.length || 0,
+          warning_flags: enhancedResult.warning_flags?.length || 0
+        })
+        result = adaptFromEnhancedResult(enhancedResult)
+        console.log(`✅ Using MULTI-CHAIN enhanced algorithm - Risk: ${result.overall_risk_score}, Confidence: ${result.confidence_score}%, Tier: ${result.data_tier}`)
+      } else if (USE_ENHANCED_ALGORITHM) {
+        const enhancedData = adaptToEnhancedFormat(tokenData, goplusData, tokenAddress, chainId)
+        console.log('🔍 Enhanced Data INPUT:', JSON.stringify(enhancedData, null, 2))
+        const enhancedResult = calculateTokenRisk(enhancedData)
+        console.log('🔍 Enhanced Result RAW:', JSON.stringify(enhancedResult, null, 2))
+        result = adaptFromEnhancedResult(enhancedResult)
+        console.log(`✅ Using ENHANCED 7-factor algorithm - Risk: ${result.overall_risk_score}, Confidence: ${result.confidence_score}%, Tier: ${result.data_tier}`)
+      } else {
+        result = await calculateRisk(tokenData, plan)
+        console.log(`Using legacy 10-factor algorithm - Risk: ${result.overall_risk_score}`)
       }
-      
-      console.log('🔍 Multi-Chain Enhanced Data INPUT:', JSON.stringify({
-        ...enhancedData,
-        // Truncate large arrays for logging
-        lp_holders: enhancedData.lp_holders ? `[${enhancedData.lp_holders.length} holders]` : undefined
-      }, null, 2))
-      
-      const enhancedResult = calculateMultiChainTokenRisk(enhancedData)
-      console.log('🔍 Multi-Chain Result RAW:', JSON.stringify(enhancedResult, null, 2))
-      result = adaptFromEnhancedResult(enhancedResult)
-      console.log(`✅ Using MULTI-CHAIN enhanced algorithm - Risk: ${result.overall_risk_score}, Confidence: ${result.confidence_score}%, Tier: ${result.data_tier}`)
-    } else if (USE_ENHANCED_ALGORITHM) {
-      const enhancedData = adaptToEnhancedFormat(tokenData, goplusData, tokenAddress, chainId)
-      console.log('🔍 Enhanced Data INPUT:', JSON.stringify(enhancedData, null, 2))
-      const enhancedResult = calculateTokenRisk(enhancedData)
-      console.log('🔍 Enhanced Result RAW:', JSON.stringify(enhancedResult, null, 2))
-      result = adaptFromEnhancedResult(enhancedResult)
-      console.log(`✅ Using ENHANCED 7-factor algorithm - Risk: ${result.overall_risk_score}, Confidence: ${result.confidence_score}%, Tier: ${result.data_tier}`)
-    } else {
-      result = await calculateRisk(tokenData, plan)
-      console.log(`Using legacy 10-factor algorithm - Risk: ${result.overall_risk_score}`)
+    } catch (calcError: any) {
+      console.error('[Risk Calculation] CRITICAL ERROR:', calcError)
+      console.error('[Risk Calculation] Stack:', calcError.stack)
+      // Re-throw the error instead of falling back
+      throw new Error(`Risk calculation failed: ${calcError.message}`)
     }
 
     // Save to Firestore if userId is provided

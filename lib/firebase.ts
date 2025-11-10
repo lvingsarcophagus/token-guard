@@ -27,7 +27,9 @@ export const db = getFirestore(app)
 export const storage = getStorage(app)
 
 // Initialize Analytics only in browser environment and handle errors
-let analytics = null
+import type { Analytics } from 'firebase/analytics'
+
+let analytics: Analytics | null = null
 if (typeof window !== 'undefined') {
   try {
     analytics = getAnalytics(app)

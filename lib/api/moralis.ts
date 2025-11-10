@@ -366,10 +366,10 @@ export async function getMoralisTokenMetadata(
 
     console.log(`[Moralis Metadata] Fetching tokenomics for ${tokenAddress} on ${chain}`);
 
-    // Use monitored API call with automatic rate limiting
-    const result = await monitoredAPICall(APIService.MORALIS, async () => {
+    // Use monitored API call with automatic rate limiting - Get metadata first
+    const metadataResult = await monitoredAPICall(APIService.MORALIS, async () => {
       const response = await fetch(
-        `${MORALIS_BASE_URL}/erc20/${tokenAddress}/stats?chain=${chain}`,
+        `${MORALIS_BASE_URL}/erc20/metadata?chain=${chain}&addresses[]=${tokenAddress}`,
         {
           headers: {
             'X-API-Key': MORALIS_API_KEY,
@@ -385,10 +385,17 @@ export async function getMoralisTokenMetadata(
       return response.json();
     });
 
-    // Extract tokenomics data
-    const totalSupply = result.total_supply ? parseFloat(result.total_supply) : 0;
-    const circulatingSupply = result.circulating_supply ? parseFloat(result.circulating_supply) : totalSupply;
-    const holderCount = result.holders_count || 0;
+    // Extract tokenomics data from metadata response
+    const tokenData = metadataResult && metadataResult.length > 0 ? metadataResult[0] : null;
+    
+    if (!tokenData) {
+      console.log('[Moralis Metadata] No metadata found');
+      return null;
+    }
+
+    const totalSupply = tokenData.total_supply ? parseFloat(tokenData.total_supply) / Math.pow(10, parseInt(tokenData.decimals || '18')) : 0;
+    const circulatingSupply = tokenData.circulating_supply ? parseFloat(tokenData.circulating_supply) : totalSupply;
+    const holderCount = 0; // Not available in metadata, need to get from stats or other endpoint
     
     // Get transaction count from recent transfers
     let txCount24h = 0;

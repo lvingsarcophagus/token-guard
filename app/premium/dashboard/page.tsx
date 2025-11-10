@@ -12,7 +12,7 @@ import {
   Zap, Crown, AlertCircle, CheckCircle, Sparkles, BarChart3,
   Clock, Target, Plus, Search, Bell, Settings, LogOut, Menu, X,
   User, Flame, BadgeCheck, Loader2, AlertTriangle, Eye, RefreshCw,
-  ChevronDown, ChevronUp, ArrowRight
+  ChevronDown, ChevronUp, ArrowRight, Star, Bookmark
 } from 'lucide-react'
 import { TokenScanService, CompleteTokenData } from '@/lib/token-scan-service'
 import type { RiskResult } from '@/lib/types/token-data'
@@ -296,7 +296,31 @@ export default function PremiumDashboard() {
     
     try {
       console.log('[Scanner] Starting scan for:', searchQuery)
-      const data = await TokenScanService.scanToken(searchQuery)
+      
+      // If input is not an address (0x...), try to resolve it to an address first
+      let addressToScan = searchQuery
+      const isAddress = searchQuery.startsWith('0x') || searchQuery.length >= 32
+      
+      if (!isAddress) {
+        console.log('[Scanner] Not an address, searching for token:', searchQuery)
+        try {
+          const searchRes = await fetch(`/api/token/search?query=${encodeURIComponent(searchQuery)}`)
+          if (searchRes.ok) {
+            const searchData = await searchRes.json()
+            if (searchData.tokens && searchData.tokens.length > 0) {
+              // Use the first matching token's address
+              addressToScan = searchData.tokens[0].address
+              console.log('[Scanner] Resolved to address:', addressToScan)
+            } else {
+              console.log('[Scanner] No matching tokens found, proceeding with original query')
+            }
+          }
+        } catch (searchError) {
+          console.warn('[Scanner] Token search failed, proceeding with original query:', searchError)
+        }
+      }
+      
+      const data = await TokenScanService.scanToken(addressToScan)
       console.log('[Scanner] Scan complete:', data)
       
       setScannedToken(data)
@@ -997,23 +1021,179 @@ export default function PremiumDashboard() {
         {/* Scan Results */}
         {selectedToken && (
           <div id="scan-results" className="border border-white/20 bg-black/60 p-6 mb-8">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-white font-mono tracking-wider">{selectedToken.symbol}</h2>
-                <p className="text-white/60 font-mono text-xs mt-1">{selectedToken.name}</p>
-                <p className="text-white/40 font-mono text-[10px] mt-1">{selectedToken.chain}</p>
+            {/* Token Header with Price & Info */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              {/* Left: Token Info */}
+              <div className="lg:col-span-1">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <h2 className="text-3xl font-bold text-white font-mono tracking-wider">{selectedToken.symbol}</h2>
+                    <p className="text-white/70 font-mono text-sm mt-1">{selectedToken.name}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-2 py-1 bg-white/10 border border-white/20 text-white/60 font-mono text-[10px] tracking-wider">
+                        {selectedToken.chain}
+                      </span>
+                      {selectedToken.confidence && (
+                        <span className="px-2 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] tracking-wider">
+                          {selectedToken.confidence}% CONFIDENCE
+                        </span>
+                      )}
+                    </div>
+                    {selectedToken.address && selectedToken.address !== 'N/A (Native Asset)' && selectedToken.address !== 'N/A' && (
+                      <p className="text-white/40 font-mono text-[10px] mt-2 break-all">
+                        {selectedToken.address}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
-              
-              <div className="text-right">
-                <div className={`text-4xl font-bold font-mono ${
+
+              {/* Center: Price & Market Data */}
+              <div className="lg:col-span-1 border-l border-r border-white/10 px-6">
+                <div className="space-y-3">
+                  {selectedToken.price > 0 && (
+                    <div>
+                      <div className="text-white/60 font-mono text-[10px] tracking-wider mb-1">CURRENT PRICE</div>
+                      <div className="text-2xl font-bold text-white font-mono">
+                        ${selectedToken.price >= 1 
+                          ? selectedToken.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : selectedToken.price >= 0.01
+                          ? selectedToken.price.toFixed(4)
+                          : selectedToken.price.toFixed(8)
+                        }
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedToken.marketCap && selectedToken.marketCap !== 'N/A' && (
+                    <div>
+                      <div className="text-white/60 font-mono text-[10px] tracking-wider mb-1">MARKET CAP</div>
+                      <div className="text-lg font-bold text-white/90 font-mono">{selectedToken.marketCap}</div>
+                    </div>
+                  )}
+
+                  {selectedToken.age && selectedToken.age !== 'N/A' && (
+                    <div>
+                      <div className="text-white/60 font-mono text-[10px] tracking-wider mb-1">TOKEN AGE</div>
+                      <div className="text-sm font-bold text-white/80 font-mono">{selectedToken.age}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: Risk Score */}
+              <div className="lg:col-span-1 flex flex-col items-center justify-center">
+                <div className={`text-6xl font-bold font-mono ${
                   selectedToken.overallRisk < 30 ? 'text-green-500' :
                   selectedToken.overallRisk < 60 ? 'text-yellow-500' :
                   selectedToken.overallRisk < 80 ? 'text-orange-500' : 'text-red-500'
                 }`}>
                   {selectedToken.overallRisk}
                 </div>
-                <div className="text-white/60 font-mono text-xs mt-1">RISK SCORE</div>
+                <div className="text-white/60 font-mono text-xs mt-2 tracking-wider">RISK SCORE</div>
+                <div className={`mt-3 px-4 py-2 rounded border font-mono text-xs tracking-wider ${
+                  selectedToken.overallRisk < 30 ? 'bg-green-500/10 border-green-500/30 text-green-400' :
+                  selectedToken.overallRisk < 60 ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' :
+                  selectedToken.overallRisk < 80 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 
+                  'bg-red-500/10 border-red-500/30 text-red-400'
+                }`}>
+                  {selectedToken.overallRisk < 30 ? 'LOW RISK' :
+                   selectedToken.overallRisk < 60 ? 'MEDIUM RISK' :
+                   selectedToken.overallRisk < 80 ? 'HIGH RISK' : 'CRITICAL RISK'}
+                </div>
               </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-white/10 mb-6"></div>
+
+            {/* Quick Action Buttons */}
+            <div className="flex flex-wrap gap-3 mb-6">
+              {/* Watchlist Button - Only show for valid contract addresses */}
+              {selectedToken.address && 
+               selectedToken.address !== 'N/A (Native Asset)' && 
+               selectedToken.address !== 'N/A' && 
+               selectedToken.address.startsWith('0x') ? (
+                <>
+                  {isInWatchlistState ? (
+                    <button
+                      onClick={handleRemoveFromWatchlist}
+                      disabled={watchlistLoading}
+                      className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-mono text-xs tracking-wider hover:from-yellow-600 hover:to-orange-600 transition-all disabled:opacity-50 shadow-lg hover:shadow-yellow-500/50"
+                    >
+                      {watchlistLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          UPDATING...
+                        </>
+                      ) : (
+                        <>
+                          <Star className="w-4 h-4 fill-current" />
+                          IN WATCHLIST
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleAddToWatchlist}
+                      disabled={watchlistLoading}
+                      className="flex items-center gap-2 px-5 py-3 bg-white/10 border border-white/30 text-white font-mono text-xs tracking-wider hover:bg-white hover:text-black hover:border-white transition-all disabled:opacity-50 backdrop-blur-md"
+                    >
+                      {watchlistLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          ADDING...
+                        </>
+                      ) : (
+                        <>
+                          <Star className="w-4 h-4" />
+                          ADD TO WATCHLIST
+                        </>
+                      )}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 text-white/40 font-mono text-xs tracking-wider cursor-not-allowed">
+                  <Star className="w-4 h-4" />
+                  WATCHLIST UNAVAILABLE (NATIVE ASSET)
+                </div>
+              )}
+
+              {/* View on Explorer Button */}
+              {selectedToken.address && 
+               selectedToken.address !== 'N/A (Native Asset)' && 
+               selectedToken.address !== 'N/A' && 
+               selectedToken.address.startsWith('0x') && (
+                <a
+                  href={`https://etherscan.io/token/${selectedToken.address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-5 py-3 bg-white/10 border border-white/30 text-white font-mono text-xs tracking-wider hover:bg-cyan-500 hover:border-cyan-500 hover:text-white transition-all backdrop-blur-md"
+                >
+                  <Eye className="w-4 h-4" />
+                  VIEW ON EXPLORER
+                  <ArrowRight className="w-3 h-3" />
+                </a>
+              )}
+
+              {/* Refresh Analysis Button */}
+              <button
+                onClick={() => handleScan()}
+                className="flex items-center gap-2 px-5 py-3 bg-white/10 border border-white/30 text-white font-mono text-xs tracking-wider hover:bg-white/20 hover:border-white/50 transition-all backdrop-blur-md"
+              >
+                <RefreshCw className="w-4 h-4" />
+                REFRESH ANALYSIS
+              </button>
+
+              {/* Close Button */}
+              <button
+                onClick={() => setSelectedToken(null)}
+                className="flex items-center gap-2 px-5 py-3 bg-transparent border border-red-500/30 text-red-400 font-mono text-xs tracking-wider hover:bg-red-500 hover:border-red-500 hover:text-white transition-all ml-auto"
+              >
+                <X className="w-4 h-4" />
+                CLOSE
+              </button>
             </div>
 
             {/* Risk Breakdown */}
@@ -1063,7 +1243,7 @@ export default function PremiumDashboard() {
             )}
 
             {selectedToken.positiveSignals?.length > 0 && (
-              <div className="border border-green-500/50 bg-green-500/10 p-4 mb-4">
+              <div className="border border-green-500/50 bg-green-500/10 p-4">
                 <h3 className="text-green-500 font-mono text-xs tracking-wider mb-2">POSITIVE SIGNALS</h3>
                 <ul className="space-y-1">
                   {selectedToken.positiveSignals.map((signal: string, i: number) => (
@@ -1072,61 +1252,6 @@ export default function PremiumDashboard() {
                 </ul>
               </div>
             )}
-
-            {/* Watchlist Button - Only show for valid contract addresses */}
-            <div className="flex gap-4">
-              {selectedToken.address && 
-               selectedToken.address !== 'N/A (Native Asset)' && 
-               selectedToken.address !== 'N/A' && 
-               selectedToken.address.startsWith('0x') ? (
-                <>
-                  {isInWatchlistState ? (
-                    <button
-                      onClick={handleRemoveFromWatchlist}
-                      disabled={watchlistLoading}
-                      className="flex-1 px-6 py-3 bg-transparent border border-red-500 text-red-500 font-mono text-xs tracking-wider hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
-                    >
-                      {watchlistLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 inline animate-spin mr-2" />
-                          REMOVING...
-                        </>
-                      ) : (
-                        <>
-                          <X className="w-4 h-4 inline mr-2" />
-                          REMOVE FROM WATCHLIST
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleAddToWatchlist}
-                      disabled={watchlistLoading}
-                      className="flex-1 px-6 py-3 bg-white text-black font-mono text-xs tracking-wider hover:bg-white/90 transition-all disabled:opacity-50"
-                    >
-                      {watchlistLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 inline animate-spin mr-2" />
-                          ADDING...
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-4 h-4 inline mr-2" />
-                          ADD TO WATCHLIST
-                        </>
-                      )}
-                    </button>
-                  )}
-                </>
-              ) : null}
-              
-              <button
-                onClick={() => setSelectedToken(null)}
-                className="px-6 py-3 bg-transparent border border-white/30 text-white font-mono text-xs tracking-wider hover:bg-white hover:text-black transition-all"
-              >
-                CLEAR
-              </button>
-            </div>
           </div>
         )}
 

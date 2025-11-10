@@ -2,7 +2,298 @@
 
 A comprehensive multi-chain token risk analysis platform with advanced behavioral analysis and smart money tracking.
 
-## 🚀 Latest Updates (January 2025)
+## 🚀 Latest Updates (November 2025)
+
+### 👮 **ADMIN USER MANAGEMENT + BUG FIXES**
+**Date**: November 10, 2025  
+**Status**: ✅ Ban/unban complete | ✅ User details modal complete | ✅ Free tier limits fixed
+
+**✅ COMPLETED IN THIS SESSION:**
+
+1. **Admin User Management Enhancements** ✓
+   - **Ban/Unban Functionality**:
+     - Created `/api/admin/ban-user` POST endpoint
+     - Updates both Firestore (`banned`, `bannedAt`, `bannedBy`, `banReason`) and Firebase Auth (`disabled` flag)
+     - Admin dashboard displays Lock/Unlock icons based on ban status
+     - Prompts admin for ban reason when banning users
+     - Reloads user list after successful ban/unban
+   
+   - **User Details Modal**:
+     - Created `/api/admin/user-details` POST endpoint
+     - Fetches comprehensive user information:
+       - Basic info: email, UID, role, tier, ban status
+       - Usage statistics: tokens analyzed, watchlist count, active alerts
+       - Authentication data: email verification, account status, sign-in provider
+       - Account metadata: creation time, last sign-in time
+       - Recent scans history (last 10 scans)
+     - Modal UI with glassmorphism design matching admin theme:
+       - Displays all fetched data in organized sections
+       - Highlights banned users with red warning banner
+       - Shows auth provider info (email, Google, etc.)
+       - Lists recent scan activity
+     - Opens when admin clicks "View Details" button
+   
+   - **Updated User Management Table**:
+     - Added 4 action buttons per user:
+       1. **View Details** (Users icon) - Opens detailed info modal
+       2. **Edit Role** (Edit icon) - Edit user role/tier
+       3. **Ban/Unban** (Lock/Unlock icon) - Toggle ban status (yellow/green)
+       4. **Delete** (Trash icon) - Delete user account
+     - Color-coded icons for quick identification
+     - Disabled state during ban operations
+
+2. **Fixed Free Dashboard Limits Bug** ✓
+   - **Problem**: New accounts incorrectly showed "limits exceeded" error immediately
+   - **Root Cause**: Signup flow created users with flat `dailyAnalyses` field, but `getDashboardStats()` was looking for nested `usage.tokensAnalyzed` field
+   - **Solution**: Updated signup page to create proper nested structure:
+     ```typescript
+     usage: {
+       tokensAnalyzed: 0,
+       lastResetDate: new Date(),
+       dailyLimit: 10
+     }
+     ```
+   - Fixed for both email/password signup and Google OAuth signup
+   - New accounts now correctly start with 0 scans and can use their 10 free daily scans
+
+---
+
+### 🎨 **MONOTONE ADMIN DASHBOARD + GOOGLE OAUTH**
+**Date**: November 10, 2025  
+**Status**: ✅ Monotone theme applied | ✅ Logo added | ✅ Google OAuth integrated
+
+**✅ COMPLETED IN THIS SESSION:**
+
+1. **Monotone Admin Dashboard Redesign** ✓
+   - Replaced colorful stat cards with clean white/gray monotone design:
+     - All borders: Changed from color-coded (blue/green/purple/yellow) to uniform `border-white/20`
+     - Text colors: Changed from color-specific to white/gray tones (`text-white/60`, `text-white/80`)
+     - Icons: Changed from colored to `text-white/40` for consistency
+     - Hover effects: Changed from color-specific glows to uniform `shadow-white/10`
+   - Updated header with logo:
+     - Replaced Shield icon with Tokenomics Lab logo (`/Logo.png`)
+     - Changed border from `border-red-500/50` to `border-white/20`
+     - Updated "SYSTEM STATUS" text from green to white
+     - Changed logout button from red to white background
+   - Updated tab navigation:
+     - Active tab: Changed from red (`bg-red-600`) to white (`bg-white text-black`)
+     - Active shadow: Changed from red glow to white glow (`shadow-white/20`)
+     - Maintains glassmorphism and backdrop-blur effects
+   - Cleaner, more professional appearance focusing on white/black/gray color palette
+
+2. **Google OAuth Integration** ✓
+   - Added Google Sign-In to **Signup Page**:
+     - Imported `GoogleAuthProvider`, `signInWithPopup` from Firebase
+     - Created `handleGoogleSignUp()` function:
+       - Opens Google popup for authentication
+       - Checks if user already exists in Firestore
+       - Creates new user profile for first-time Google users
+       - Tracks `analyticsEvents.signup('google')` for new users
+       - Tracks `analyticsEvents.login('google')` for returning users
+     - Added Google sign-in button with Google logo SVG
+     - Placed below email signup with "OR" divider
+     - Full error handling (popup blocked, cancelled, etc.)
+   
+   - Added Google Sign-In to **Login Page**:
+     - Imported same Firebase auth modules
+     - Created `handleGoogleLogin()` function:
+       - Opens Google popup for authentication
+       - Creates user profile if doesn't exist (covers edge case)
+       - Tracks analytics events appropriately
+       - Redirects to dashboard after successful login
+     - Added matching Google login button
+     - Consistent UI with signup page
+     - Same error handling as signup
+   
+   - **User Flow**:
+     - New Google users → Create Firestore profile → Redirect to free-dashboard
+     - Existing Google users → Update last login → Redirect to dashboard
+     - All Google users saved with metadata: `signupSource: "google"`
+
+3. **Applied Tokenomics Lab Theme to Admin Dashboard** ✓
+   - Replaced all standard Card components with glassmorphism-styled divs:
+     - Background: `bg-black/60` with `backdrop-blur-xl`
+     - Borders: `border-2 border-white/20` with hover effects
+     - Shadows: `shadow-2xl` with color-specific glows (red/green/blue/purple)
+   - Updated all typography to monospace fonts:
+     - All text uses `font-mono` with `tracking-wider`
+     - Headers: Bold with larger tracking
+     - Labels: Smaller size with increased letter-spacing
+   - Enhanced stat cards with color-coded borders:
+     - Blue cards: Total Users with blue-500 borders
+     - Green cards: Premium Users with green-500 borders
+     - Purple cards: Cached Tokens with purple-500 borders
+     - Yellow cards: Queries with yellow-500 borders
+   - Updated tab navigation with cyber theme:
+     - Active tab: Red background with red-500 border and shadow glow
+     - Inactive tabs: Translucent with white/20 borders and backdrop-blur
+     - Added hover effects with increased opacity and border brightness
+   - Enhanced all interactive elements:
+     - Buttons: Border-2 styling with hover state transitions
+     - Inputs: Enhanced focus states with border color changes
+     - Table rows: Backdrop-blur on hover for subtle effect
+     - Action buttons: Color-coded with matching shadows (edit=blue, delete=red)
+   - Updated all status indicators:
+     - Operational: Green with pulsing animation
+     - Degraded: Yellow with border highlight
+     - Down: Red with visual emphasis
+   - Enhanced API status cards:
+     - Color-coded borders matching status (green/yellow/red)
+     - Hover effects with shadow glows
+     - Backdrop-blur for depth
+   - Updated system metrics with refined styling:
+     - Progress bars with borders for definition
+     - Metric cards with color-specific borders
+     - Health status items with enhanced borders
+   - Improved analytics visualizations:
+     - Enhanced distribution bars with borders
+     - Performance metric cards with backdrop-blur
+     - Hover effects on all interactive elements
+   - Refined settings tab:
+     - Warning cards with yellow theme
+     - Danger zone with red theme
+     - Enhanced button styling with transitions
+
+**🎨 Theme Consistency:**
+- ✅ All components match landing page aesthetic
+- ✅ Glassmorphism applied throughout (bg-black/60 + backdrop-blur-xl)
+- ✅ Monospace fonts with tracking-wider on all text
+- ✅ Border-2 styling on all containers
+- ✅ Color-coded status indicators (green/yellow/red)
+- ✅ Smooth transitions on all interactive elements
+- ✅ Cyber-themed decorative effects
+- ✅ Consistent shadow glows on hover states
+
+---
+
+### ✨ **ENHANCED SIGNUP + FIREBASE ANALYTICS** 📊
+**Date**: November 10, 2025  
+**Status**: ✅ Enhanced signup form | ✅ Logout redirect fixed | ✅ Firebase Analytics integrated
+
+**✅ COMPLETED IN THIS SESSION:**
+
+1. **Enhanced Signup Form** ✓
+   - Added new fields:
+     - **Full Name** (required)
+     - **Company** (optional)
+     - **Email** (required)
+     - **Country** (optional)
+     - **Password** (required, min 8 chars)
+     - **Confirm Password** (required, must match)
+     - **Terms Agreement** checkbox with links to Terms of Service and Privacy Policy
+   - Improved validation:
+     - Password strength check (minimum 8 characters)
+     - Password confirmation match validation
+     - Terms agreement requirement
+   - Enhanced user data saved to Firestore:
+     - Basic info: name, company, country, email
+     - Account metadata: tier, plan, preferences
+     - Analytics metadata: signup source, user agent
+     - Timestamps: createdAt, lastLoginAt, updatedAt
+   - Better error handling with specific messages for different Firebase auth errors
+
+2. **Fixed Logout Redirect** ✓
+   - Issue: Users redirected to premium-signup/upgrade page after logout
+   - Solution: Enhanced handleLogout function to:
+     - Force redirect to landing page ("/") using router.replace()
+     - Clear localStorage and sessionStorage to remove cached data
+     - Hard reload page to clear all React state
+     - Prevent back navigation to protected routes
+   - Added analytics tracking on logout
+   - Now consistently redirects to landing page (home) after logout
+
+3. **Firebase Analytics Integration** ✓
+   - Created `lib/firebase-analytics.ts` utility with:
+     - **Event tracking**: trackEvent(), analyticsEvents object
+     - **User tracking**: setAnalyticsUserId(), setAnalyticsUserProperties()
+     - **Predefined events**:
+       - User events: signup, login, logout
+       - Token analysis: tokenSearch, tokenAnalyze
+       - Watchlist: addToWatchlist, removeFromWatchlist
+       - Premium: viewPricing, upgradeToPremium, cancelSubscription
+       - Charts: viewChart, changeTimeframe
+       - Errors: apiError, analysisError
+   - Integrated into auth-context:
+     - Tracks user on login with initializeUserTracking()
+     - Clears tracking on logout with clearUserTracking()
+     - Automatically sets user properties (plan, email, account age)
+   - Integrated into signup:
+     - Tracks successful signups with method ('email')
+   - Integrated into navbar:
+     - Tracks logout events before signing out
+   - Ready for Google Analytics dashboard reporting
+
+### ✨ **TOKEN NAME SEARCH FIX + API VERIFICATION** 🔧
+**Date**: November 10, 2025  
+**Status**: ✅ Token name search fixed | ✅ Multi-chain algorithm verified | ✅ All APIs working
+
+**✅ COMPLETED EARLIER IN SESSION:**
+
+1. **Token Name Search Fix** ✓
+   - Fixed issue where searching "PEPE" by name returned dummy score (15) instead of real risk analysis
+   - Added automatic address resolution: When user enters token name (not address), system:
+     - Calls `/api/token/search` to find matching tokens
+     - Resolves name → contract address (e.g., "PEPE" → `0x6982508145454ce325ddbe47a25d4ec3d2311933`)
+     - Uses full multi-chain risk analysis with resolved address
+   - Now returns **real risk scores** (e.g., PEPE = 21/100 LOW) instead of dummy values
+   - **Result**: Both name search and address search return accurate risk analysis
+
+2. **Enhanced Token Info Display** ✓
+   - Redesigned scan results header with 3-column layout:
+     - **Left**: Token symbol, name, chain, confidence score, contract address
+     - **Center**: Current price (formatted), market cap, token age
+     - **Right**: Large risk score with color-coded badge (LOW/MEDIUM/HIGH/CRITICAL)
+   - Price formatting: 
+     - ≥$1: 2 decimal places with thousands separators
+     - ≥$0.01: 4 decimal places
+     - <$0.01: 8 decimal places (for micro-cap tokens)
+   - Added confidence score badge in token info section
+   - Contract address displayed with break-all for readability
+
+3. **Enhanced Watchlist Integration** ✓
+   - Moved watchlist buttons to prominent position at top of scan results
+   - New action buttons bar includes:
+     - **ADD TO WATCHLIST**: Star icon, hover effect with border glow
+     - **IN WATCHLIST**: Yellow gradient badge when already added
+     - **VIEW ON EXPLORER**: Direct link to Etherscan with arrow icon
+     - **REFRESH ANALYSIS**: Re-run analysis with current data
+     - **CLOSE**: Remove scan results from view
+   - Watchlist button states:
+     - Not in watchlist: White border with hover effect
+     - In watchlist: Yellow-orange gradient with filled star
+     - Loading: Spinner animation
+     - Disabled for native assets: Grayed out with explanation
+   - Removed duplicate buttons from bottom (cleaner UI)
+
+2. **API Verification & Testing** ✓
+   - Verified all 7 APIs working correctly:
+     - ✅ Mobula (price, market data)
+     - ✅ GoPlus Security (contract analysis, holder data)
+     - ✅ Moralis (on-chain tokenomics, metadata)
+     - ✅ CoinGecko (price history fallback)
+     - ✅ DexScreener (DEX data fallback)
+     - ✅ Helius (Solana support)
+     - ✅ Blockfrost (Cardano support)
+   - Fixed Moralis API endpoint: Changed from `/stats` to `/metadata`
+   - Removed fallback mechanisms to expose errors (no silent failures)
+   - Created test scripts: `test-moralis.js`, `test-risk-calculation.js`
+
+3. **Risk Calculation Hardening** ✓
+   - Removed legacy algorithm fallback - multi-chain algorithm now runs without safety net
+   - Enhanced error handling: Throws errors instead of falling back silently
+   - Added detailed logging for debugging
+   - Multi-chain algorithm verified working:
+     - 7-factor risk calculation with behavioral data
+     - Confidence scores (90%+)
+     - Data tier classification (TIER_1_PREMIUM)
+     - Critical/warning flags detection
+   - **Test Results**: PEPE analyzed with 21/100 risk score, 93% confidence, TIER_1_PREMIUM
+
+4. **Build & Deployment** ✓
+   - Fixed TypeScript compilation errors
+   - Production build successful (52 pages generated)
+   - All API routes compiled successfully
+   - Dev server running on http://localhost:3000
 
 ### ✨ **NAVBAR GLASSMORPHISM & FIXES COMPLETE** 🎨
 **Date**: January 2025  
