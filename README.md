@@ -5,17 +5,26 @@ A comprehensive **multi-chain** token risk analysis platform with AI-powered sec
 ## � Recent Updates (Latest)
 
 ### UI & AI Improvements (Current)
-- **Glassmorphism UI**: Applied modern glass-effect styling to all dashboard sections (scanner, results, watchlist, analytics, insights)
-- **Groq AI Integration**: Switched from Gemini to Groq AI using Llama 3.3 70B for 2-3x faster inference
-- **Fixed Z-Index Issues**: Token search dropdowns now properly layer above other content (`z-[100]`)
-- **CoinMarketCap Integration**: Fast token search by name/symbol
-- **Enhanced Logging**: Added comprehensive debug logging for AI summary generation:
+- **Glassmorphism UI**: ✅ Applied modern glass-effect styling to all dashboard sections (scanner, results, watchlist, analytics, insights)
+- **Groq AI Integration**: ✅ Switched from Gemini to Groq AI using Llama 3.3 70B for 2-3x faster inference
+- **Fixed Z-Index Issues**: ✅ Token search dropdowns now properly layer above other content (`z-[100]`)
+- **CoinMarketCap Integration**: ✅ Fast token search by name/symbol - tested with PEPE search, 32 results found
+- **Enhanced Logging**: ✅ Added comprehensive debug logging for AI summary generation:
   - GROQ_API_KEY existence check
   - User plan verification
   - Factor count tracking
   - Raw AI response logging
   - Detailed error messages with stack traces
   - **To debug**: Run `npm run dev` and check terminal for `🤖 [AI Analysis]` logs
+- **Build Fix**: ✅ Excluded `scripts/**/*` from TypeScript compilation to prevent Netlify build failures
+- **Testing**: ✅ Verified with Playwright MCP:
+  - Token search dropdown displays correctly with z-index fix
+  - PEPE token scan completes successfully
+  - All 10 risk factors display
+  - Chain-specific security info shows (Ethereum: Contract Verified, Ownership, Proxy)
+  - AI classification shows MEME TOKEN at 90% confidence
+  - Historical analytics charts render properly
+  - **Note**: Comprehensive AI summary section still needs investigation (not appearing in UI despite AI classification working)
 
 ### Solana Multi-Source Integration
 - **Fixed Moralis API for Solana**: Updated all Moralis functions to use Solana-specific endpoints instead of EVM-only `/erc20/` paths
