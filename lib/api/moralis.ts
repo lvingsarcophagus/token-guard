@@ -29,7 +29,11 @@ const CHAIN_MAP: Record<string, string> = {
   '42161': 'arbitrum',
   '10': 'optimism',
   '8453': 'base',
-  '11155111': 'sepolia'
+  '11155111': 'sepolia',
+  // Solana support
+  '501': 'solana',
+  '900': 'solana',
+  '1399811149': 'solana'  // Custom chainId mapping
 };
 
 interface MoralisHolderHistory {
@@ -73,17 +77,22 @@ export async function getMoralisHolderHistory(
       return null;
     }
 
+    // Use different endpoint for Solana vs EVM
+    const isSolana = chain === 'solana';
+    const endpoint = isSolana
+      ? `${MORALIS_BASE_URL}/${tokenAddress}/metadata?network=${chain}`
+      : `${MORALIS_BASE_URL}/erc20/${tokenAddress}/stats?chain=${chain}`;
+
+    console.log(`[Moralis] Fetching holder history from ${isSolana ? 'Solana' : 'EVM'} endpoint`);
+
     // Use monitored API call with automatic rate limiting
     const result = await monitoredAPICall(APIService.MORALIS, async () => {
-      const response = await fetch(
-        `${MORALIS_BASE_URL}/erc20/${tokenAddress}/stats?chain=${chain}`,
-        {
-          headers: {
-            'X-API-Key': MORALIS_API_KEY,
-            'Accept': 'application/json'
-          }
+      const response = await fetch(endpoint, {
+        headers: {
+          'X-API-Key': MORALIS_API_KEY,
+          'Accept': 'application/json'
         }
-      );
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -126,6 +135,17 @@ export async function getMoralisLiquidityHistory(
       console.warn('[Moralis] API key not configured');
       return null;
     }
+
+    // Use different endpoint for Solana vs EVM
+    const isSolana = chain === 'solana';
+    
+    // Note: Solana liquidity requires different approach (use Raydium/Orca pools)
+    if (isSolana) {
+      console.log('[Moralis] Skipping liquidity for Solana - not supported by Moralis');
+      return null;
+    }
+
+    console.log(`[Moralis] Fetching liquidity history from EVM endpoint`);
 
     // Get current liquidity from pairs
     const response = await fetch(
@@ -181,16 +201,23 @@ export async function getMoralisTransactionPatterns(
       return null;
     }
 
+
+
+    // Use different endpoint for Solana vs EVM
+    const isSolana = chain === 'solana';
+    const endpoint = isSolana
+      ? `${MORALIS_BASE_URL}/${tokenAddress}/transfers?network=${chain}`
+      : `${MORALIS_BASE_URL}/erc20/${tokenAddress}/transfers?chain=${chain}&limit=100`;
+
+    console.log(`[Moralis] Fetching transaction patterns from ${isSolana ? 'Solana' : 'EVM'} endpoint`);
+
     // Get recent transfers to analyze buy/sell patterns
-    const response = await fetch(
-      `${MORALIS_BASE_URL}/erc20/${tokenAddress}/transfers?chain=${chain}&limit=100`,
-      {
-        headers: {
-          'X-API-Key': MORALIS_API_KEY,
-          'Accept': 'application/json'
-        }
+    const response = await fetch(endpoint, {
+      headers: {
+        'X-API-Key': MORALIS_API_KEY,
+        'Accept': 'application/json'
       }
-    );
+    });
 
     if (!response.ok) {
       console.warn(`[Moralis] HTTP ${response.status} for transaction patterns`);
@@ -366,17 +393,22 @@ export async function getMoralisTokenMetadata(
 
     console.log(`[Moralis Metadata] Fetching tokenomics for ${tokenAddress} on ${chain}`);
 
+    // Use different endpoint for Solana vs EVM
+    const isSolana = chain === 'solana';
+    const metadataEndpoint = isSolana
+      ? `${MORALIS_BASE_URL}/${tokenAddress}/metadata?network=${chain}`
+      : `${MORALIS_BASE_URL}/erc20/metadata?chain=${chain}&addresses[]=${tokenAddress}`;
+
+    console.log(`[Moralis Metadata] Using ${isSolana ? 'Solana' : 'EVM'} endpoint`);
+
     // Use monitored API call with automatic rate limiting - Get metadata first
     const metadataResult = await monitoredAPICall(APIService.MORALIS, async () => {
-      const response = await fetch(
-        `${MORALIS_BASE_URL}/erc20/metadata?chain=${chain}&addresses[]=${tokenAddress}`,
-        {
-          headers: {
-            'X-API-Key': MORALIS_API_KEY,
-            'Accept': 'application/json'
-          }
+      const response = await fetch(metadataEndpoint, {
+        headers: {
+          'X-API-Key': MORALIS_API_KEY,
+          'Accept': 'application/json'
         }
-      );
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);

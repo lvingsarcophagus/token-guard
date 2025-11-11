@@ -19,6 +19,7 @@ export async function getHeliusSolanaData(
   tokenAddress: string
 ): Promise<SolanaSecurityData | null> {
   try {
+    console.log(`[Helius] API key available: ${!!HELIUS_API_KEY}`);
     if (!HELIUS_API_KEY) {
       console.warn('[Helius] API key not configured');
       return null;

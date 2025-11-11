@@ -296,7 +296,7 @@ export default function ScanPage() {
                   {riskResult.detailed_insights && riskResult.detailed_insights.length > 0 && (
                     <div className="border border-white/20 bg-black/30 p-4">
                       <div className="flex items-start gap-3">
-                        <AlertTriangle className="w-5 h-5 mt-0.5 text-blue-500" />
+                        <AlertTriangle className="w-5 h-5 mt-0.5 text-white/70" />
                         <div className="flex-1">
                           <p className="text-white font-mono text-sm font-bold mb-2">
                             Risk Insights

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
 import { MorphingSquare } from '@/components/ui/morphing-square'
+import TokenSearchComponent from '@/components/token-search-cmc'
 import { 
   Shield, 
   Zap,
@@ -75,6 +76,7 @@ export default function FreeDashboard() {
   const [scanError, setScanError] = useState('')
   const [scannedToken, setScannedToken] = useState<CompleteTokenData | null>(null)
   const [riskResult, setRiskResult] = useState<RiskResult | null>(null)
+  const [showTokenSearch, setShowTokenSearch] = useState(false)
 
   // Watchlist states
   const [watchlist, setWatchlist] = useState<WatchlistToken[]>([])
@@ -149,6 +151,20 @@ export default function FreeDashboard() {
     }
   }
 
+  // Handle token selection from CMC search
+  const handleTokenSelectFromSearch = async (address: string, chain: string, symbol: string, name: string) => {
+    console.log(`[Dashboard] Token selected from search: ${name} (${symbol}) on ${chain}`)
+    console.log(`[Dashboard] Address: ${address}`)
+    
+    // Set the search query to the address
+    setSearchQuery(address)
+    
+    // Automatically trigger scan
+    setTimeout(() => {
+      handleScan()
+    }, 100)
+  }
+
   const handleScan = async () => {
     if (!searchQuery.trim()) {
       setScanError('PLEASE ENTER A TOKEN ADDRESS OR SYMBOL')
@@ -179,17 +195,27 @@ export default function FreeDashboard() {
 
       setScannedToken(data)
 
-      // Get risk analysis for addresses, or create basic display for symbols
-      const isAddress = query.startsWith('0x') && query.length === 42
+      // Get risk analysis for addresses (supports both EVM and Solana)
+      const isEVMAddress = query.startsWith('0x') && query.length === 42
+      const isSolanaAddress = query.length >= 32 && query.length <= 44 && !query.startsWith('0x')
+      const isAddress = isEVMAddress || isSolanaAddress
       
       if (isAddress) {
         try {
+          // Determine chainId - if Solana address or data indicates Solana, use Solana chainId
+          let chainId = data.chain || 1
+          if (isSolanaAddress || data.chainInfo?.chainName?.toLowerCase().includes('solana')) {
+            chainId = 1399811149 // Solana
+          }
+          
+          console.log(`[Dashboard] Analyzing token on chain ${chainId} (Solana: ${isSolanaAddress})`)
+          
           const res = await fetch('/api/analyze-token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               tokenAddress: query,
-              chainId: data.chain,
+              chainId: chainId,
               userId: user?.uid || 'anonymous',
               plan: userProfile?.plan || 'FREE',
             }),
@@ -802,44 +828,65 @@ export default function FreeDashboard() {
           </div>
         </div>
 
-        {/* Integrated Token Scanner */}
+        {/* Integrated Token Scanner - Glassmorphism */}
         <div className="mb-8">
-          <div className="border-2 border-white/40 bg-black/80 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Zap className="w-5 h-5 text-white" />
-              <h2 className="text-white font-mono text-lg tracking-wider">QUICK SCAN</h2>
-            </div>
-            
-            <div className="flex flex-col lg:flex-row gap-3">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="ENTER TOKEN ADDRESS OR SYMBOL..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleScan()}
-                  disabled={scanning}
-                  className="w-full px-4 py-3 bg-black border border-white/30 text-white font-mono text-sm placeholder:text-white/40 focus:outline-none focus:border-white transition-colors disabled:opacity-50"
-                />
-              </div>
+          <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-white" />
+                  <h2 className="text-white font-mono text-lg tracking-wider">QUICK SCAN</h2>
+                </div>
               <button
-                onClick={handleScan}
-                disabled={scanning || !searchQuery.trim()}
-                className="px-8 py-3 bg-white text-black font-mono text-sm hover:bg-black hover:text-white border-2 border-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap"
+                onClick={() => setShowTokenSearch(!showTokenSearch)}
+                className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white font-mono text-xs border border-white/30 transition-colors"
               >
-                {scanning ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    SCANNING...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4" />
-                    SCAN NOW
-                  </>
-                )}
+                {showTokenSearch ? 'MANUAL INPUT' : 'SEARCH BY NAME'}
               </button>
             </div>
+            
+            {showTokenSearch ? (
+              /* Token Search by Name/Symbol */
+              <div className="space-y-4">
+                <TokenSearchComponent onTokenSelect={handleTokenSelectFromSearch} />
+                <div className="text-xs font-mono text-white/60">
+                  💡 Search for tokens by name or symbol (e.g., BONK, Solana)
+                </div>
+              </div>
+            ) : (
+              /* Traditional Address/Symbol Input */
+              <div className="flex flex-col lg:flex-row gap-3">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="ENTER TOKEN ADDRESS OR SYMBOL..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleScan()}
+                    disabled={scanning}
+                    className="w-full px-4 py-3 bg-black border border-white/30 text-white font-mono text-sm placeholder:text-white/40 focus:outline-none focus:border-white transition-colors disabled:opacity-50"
+                  />
+                </div>
+                <button
+                  onClick={handleScan}
+                  disabled={scanning || !searchQuery.trim()}
+                  className="px-8 py-3 bg-white text-black font-mono text-sm hover:bg-black hover:text-white border-2 border-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap"
+                >
+                  {scanning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      SCANNING...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" />
+                      SCAN NOW
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
 
             {scanError && (
               <div className="mt-4 p-3 border border-red-500/50 bg-red-500/10">
@@ -923,7 +970,7 @@ export default function FreeDashboard() {
                         <span className="px-2 py-1 bg-white/10 border border-white/20 text-white/60 font-mono text-[10px] tracking-wider">
                           {selectedToken.chain}
                         </span>
-                        <span className="px-2 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] tracking-wider">
+                        <span className="px-2 py-1 bg-white/10 border border-white/30 text-white/80 font-mono text-[10px] tracking-wider">
                           {selectedToken.confidence || 93}% CONFIDENCE
                         </span>
                       </div>
@@ -1009,7 +1056,7 @@ export default function FreeDashboard() {
                   href={`https://${selectedToken.chain === 'Ethereum' ? 'etherscan.io' : 'bscscan.com'}/token/${selectedToken.address}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-5 py-3 bg-white/10 border border-white/30 text-white font-mono text-xs tracking-wider hover:bg-cyan-500 hover:border-cyan-500 hover:text-white transition-all backdrop-blur-md"
+                  className="flex items-center gap-2 px-5 py-3 bg-white/10 border border-white/30 text-white font-mono text-xs tracking-wider hover:bg-white/20 hover:border-white/50 hover:text-white transition-all backdrop-blur-md"
                 >
                   <Search className="w-4 h-4" />
                   VIEW ON EXPLORER
@@ -1261,6 +1308,7 @@ export default function FreeDashboard() {
                 <p className="text-white/40 font-mono text-xs">NO SCANS YET</p>
               </div>
             )}
+            </div>
           </div>
         </div>
 

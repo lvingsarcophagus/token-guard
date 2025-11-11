@@ -6,6 +6,7 @@
  */
 
 import { getAdminDb } from './firebase-admin'
+import type { RiskResult } from './types/token-data'
 
 export interface CachedTokenData {
   address: string
@@ -32,6 +33,7 @@ export interface CachedTokenData {
     burnMechanism: boolean
     maxSupply?: number
   }
+  aiSummary?: RiskResult['ai_summary']
   lastUpdated: string
   queryCount: number
   chainId: string

@@ -26,12 +26,12 @@ export interface FactorWeights {
  * Focus: Supply control, holder distribution, liquidity
  */
 export const STANDARD_WEIGHTS: FactorWeights = {
-  supply_dilution: 0.20,       // 20% - Most important (inflation risk)
-  holder_concentration: 0.18,  // 18% - Whale manipulation
-  liquidity_depth: 0.16,       // 16% - Rug pull indicator
+  supply_dilution: 0.18,       // 18% - Most important (inflation risk)
+  holder_concentration: 0.20,  // 20% - Whale manipulation + wash trading (INCREASED)
+  liquidity_depth: 0.16,       // 16% - Rug pull indicator + liquidity drops
   contract_control: 0.15,      // 15% - Security critical
   tax_fee: 0.11,              // 11% - Hidden fees
-  distribution: 0.10,          // 10% - Holder spread
+  distribution: 0.08,          // 8% - Holder spread (REDUCED - now part of holder_concentration)
   burn_deflation: 0.06,        // 6% - Deflation mechanisms
   adoption: 0.10,              // 10% - Social/on-chain activity
   audit: 0.04                  // 4% - Code verification
@@ -42,15 +42,15 @@ export const STANDARD_WEIGHTS: FactorWeights = {
  * Focus: Whales, liquidity, social adoption
  */
 export const MEME_WEIGHTS: FactorWeights = {
-  supply_dilution: 0.16,       // Lower - memes often have fixed supply
-  holder_concentration: 0.22,  // HIGHER - whales control meme markets
-  liquidity_depth: 0.20,       // HIGHER - rug pulls extremely common
-  contract_control: 0.12,      // Lower - usually simple contracts
-  tax_fee: 0.10,              // Same - can have high taxes
-  distribution: 0.08,          // Lower - concentration matters more
-  burn_deflation: 0.02,        // LOWER - memes rarely burn
-  adoption: 0.15,              // HIGHER - social hype is critical
-  audit: 0.01                  // LOWER - rarely audited
+  supply_dilution: 0.14,       // 14% - Lower - memes often have fixed supply
+  holder_concentration: 0.24,  // 24% - HIGHER - whales control meme markets + wash trading
+  liquidity_depth: 0.20,       // 20% - HIGHER - rug pulls extremely common + liquidity drops
+  contract_control: 0.12,      // 12% - Lower - usually simple contracts
+  tax_fee: 0.10,              // 10% - Same - can have high taxes
+  distribution: 0.06,          // 6% - Lower - concentration matters more
+  burn_deflation: 0.02,        // 2% - LOWER - memes rarely burn
+  adoption: 0.15,              // 15% - HIGHER - social hype is critical
+  audit: 0.01                  // 1% - LOWER - rarely audited
 };
 
 /**
@@ -58,15 +58,15 @@ export const MEME_WEIGHTS: FactorWeights = {
  * Focus: Contract control (freeze/mint authority)
  */
 export const SOLANA_WEIGHTS: FactorWeights = {
-  supply_dilution: 0.15,       // Lower - Solana tokens often fixed supply
-  holder_concentration: 0.18,  // Standard
-  liquidity_depth: 0.18,       // Slightly higher - rug pulls common
-  contract_control: 0.35,      // HIGHEST - Solana has unique critical risks
-  tax_fee: 0.00,               // N/A - Solana doesn't have token taxes
-  distribution: 0.08,          // Standard
-  burn_deflation: 0.04,        // Lower
-  adoption: 0.10,              // Standard
-  audit: 0.02                  // Lower - SPL tokens rarely audited
+  supply_dilution: 0.13,       // 13% - Lower - Solana tokens often fixed supply
+  holder_concentration: 0.20,  // 20% - Standard but enhanced with wash trading detection
+  liquidity_depth: 0.18,       // 18% - Slightly higher - rug pulls common + liquidity drops
+  contract_control: 0.35,      // 35% - HIGHEST - Solana has unique critical risks
+  tax_fee: 0.00,               // 0% - N/A - Solana doesn't have token taxes
+  distribution: 0.06,          // 6% - Standard
+  burn_deflation: 0.04,        // 4% - Lower
+  adoption: 0.10,              // 10% - Standard
+  audit: 0.02                  // 2% - Lower - SPL tokens rarely audited
 };
 
 /**

@@ -296,3 +296,237 @@ Focus on what each means for investors.
     return [];
   }
 }
+
+// ============================================================================
+// COMPREHENSIVE AI SUMMARY (A + B + C)
+// ============================================================================
+
+export interface AISummaryResult {
+  executive_summary: string;
+  recommendation: 'BUY' | 'RESEARCH_MORE' | 'AVOID';
+  classification: {
+    type: 'MEME_TOKEN' | 'UTILITY_TOKEN';
+    confidence: number;
+  };
+  factor_explanations: {
+    [key: string]: string;
+  };
+  top_risk_factors: Array<{
+    name: string;
+    score: number;
+    explanation: string;
+    impact: string;
+  }>;
+  key_insights: string[];
+}
+
+/**
+ * Generate comprehensive AI analysis including:
+ * A) Executive Summary (3-4 sentences + recommendation)
+ * B) Factor Explanations (why each score matters)
+ * C) Top 3 Riskiest Factors Detailed Analysis
+ */
+export async function generateComprehensiveAISummary(
+  tokenName: string,
+  chainName: string,
+  riskScore: number,
+  riskLevel: string,
+  breakdown: Record<string, number>,
+  criticalFlags: string[],
+  warningFlags: string[],
+  positiveSignals: string[],
+  isMeme: boolean,
+  memeConfidence: number,
+  additionalContext?: {
+    marketCap?: number;
+    liquidityUSD?: number;
+    holderCount?: number;
+    twitterMetrics?: any;
+  }
+): Promise<AISummaryResult> {
+  
+  const ai = getGenAI();
+  
+  if (!ai) {
+    console.log('[Gemini AI] No API key configured, using fallback summary');
+    return generateAISummaryFallback(
+      tokenName,
+      riskScore,
+      riskLevel,
+      breakdown,
+      isMeme,
+      memeConfidence
+    );
+  }
+  
+  try {
+    const model = ai.getGenerativeModel({ 
+      model: "gemini-2.0-flash-exp",
+      generationConfig: {
+        temperature: 0.4, // Professional but explanatory
+        maxOutputTokens: 800
+      }
+    });
+
+    // Build comprehensive context for the AI
+    const factorsText = Object.entries(breakdown)
+      .map(([name, score]) => `${name}: ${score}/100`)
+      .join(', ');
+
+    const flagsText = {
+      critical: criticalFlags.length > 0 ? criticalFlags.join(', ') : 'None',
+      warnings: warningFlags.length > 0 ? warningFlags.join(', ') : 'None',
+      positive: positiveSignals.length > 0 ? positiveSignals.join(', ') : 'None'
+    };
+
+    const prompt = `You are a professional cryptocurrency security analyst. Analyze this token comprehensively.
+
+TOKEN: ${tokenName} on ${chainName}
+OVERALL RISK SCORE: ${riskScore}/100 (${riskLevel})
+TOKEN TYPE: ${isMeme ? 'Meme Token' : 'Utility Token'} (${memeConfidence}% confidence)
+
+RISK FACTOR BREAKDOWN:
+${factorsText}
+
+SECURITY FLAGS:
+- Critical Issues: ${flagsText.critical}
+- Warning Issues: ${flagsText.warnings}
+- Positive Signals: ${flagsText.positive}
+
+${additionalContext?.marketCap ? `MARKET DATA:
+- Market Cap: $${(additionalContext.marketCap / 1e6).toFixed(2)}M
+- Liquidity: $${(additionalContext.liquidityUSD ? additionalContext.liquidityUSD / 1e3 : 0).toFixed(2)}K
+- Holders: ${additionalContext.holderCount?.toLocaleString() || 'N/A'}` : ''}
+
+RESPOND ONLY IN THIS JSON FORMAT (no markdown, pure JSON):
+{
+  "executive_summary": "3-4 sentences summarizing the token's risk profile, key concerns, and overall investment appeal. Write like a professional analyst.",
+  "recommendation": "BUY or RESEARCH_MORE or AVOID",
+  "factor_explanations": {
+    "factor_name_1": "Why this factor matters for token holders",
+    "factor_name_2": "Why this factor matters for token holders",
+    "factor_name_3": "Why this factor matters for token holders",
+    "factor_name_4": "Why this factor matters for token holders",
+    "factor_name_5": "Why this factor matters for token holders"
+  },
+  "top_risk_factors": [
+    {
+      "name": "Highest risk factor name",
+      "score": 95,
+      "explanation": "Detailed explanation of why this score is concerning",
+      "impact": "Impact on token holders: specific risks or dangers"
+    },
+    {
+      "name": "Second highest risk factor",
+      "score": 80,
+      "explanation": "Detailed explanation",
+      "impact": "Impact on token holders"
+    },
+    {
+      "name": "Third highest risk factor",
+      "score": 70,
+      "explanation": "Detailed explanation",
+      "impact": "Impact on token holders"
+    }
+  ],
+  "key_insights": [
+    "Key insight 1",
+    "Key insight 2",
+    "Key insight 3"
+  ]
+}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    
+    console.log(`[Gemini AI] Generated comprehensive summary (${text.length} chars)`);
+
+    // Parse JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      
+      return {
+        executive_summary: parsed.executive_summary,
+        recommendation: parsed.recommendation,
+        classification: {
+          type: isMeme ? 'MEME_TOKEN' : 'UTILITY_TOKEN',
+          confidence: memeConfidence
+        },
+        factor_explanations: parsed.factor_explanations || {},
+        top_risk_factors: parsed.top_risk_factors || [],
+        key_insights: parsed.key_insights || []
+      };
+    }
+
+    throw new Error('Invalid JSON response from Gemini');
+
+  } catch (error: any) {
+    console.error('[Gemini AI] Comprehensive summary failed:', error.message);
+    return generateAISummaryFallback(
+      tokenName,
+      riskScore,
+      riskLevel,
+      breakdown,
+      isMeme,
+      memeConfidence
+    );
+  }
+}
+
+/**
+ * Fallback summary when AI is unavailable
+ */
+function generateAISummaryFallback(
+  tokenName: string,
+  riskScore: number,
+  riskLevel: string,
+  breakdown: Record<string, number>,
+  isMeme: boolean,
+  memeConfidence: number
+): AISummaryResult {
+  
+  // Find top 3 factors
+  const topFactors = Object.entries(breakdown)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3);
+
+  const summary = `${tokenName} presents a ${riskLevel.toLowerCase()} risk profile with an overall risk score of ${riskScore}/100. ` +
+    `This ${isMeme ? 'meme token' : 'utility token'} (${memeConfidence}% confidence) exhibits mixed risk characteristics. ` +
+    `Key concerns include elevated ${topFactors[0]?.[0]?.toLowerCase() || 'market'} risk. ` +
+    `Further research is recommended before making investment decisions.`;
+
+  const recommendation = riskScore >= 75 ? 'AVOID' : riskScore >= 50 ? 'RESEARCH_MORE' : 'BUY';
+
+  const factorExplanations: Record<string, string> = {};
+  Object.entries(breakdown).forEach(([name, score]) => {
+    if (score >= 70) {
+      factorExplanations[name] = `This factor shows elevated risk (${score}/100) and requires attention.`;
+    } else if (score >= 40) {
+      factorExplanations[name] = `This factor shows moderate concern (${score}/100). Monitor closely.`;
+    } else {
+      factorExplanations[name] = `This factor appears relatively safe (${score}/100).`;
+    }
+  });
+
+  return {
+    executive_summary: summary,
+    recommendation,
+    classification: {
+      type: isMeme ? 'MEME_TOKEN' : 'UTILITY_TOKEN',
+      confidence: memeConfidence
+    },
+    factor_explanations: factorExplanations,
+    top_risk_factors: topFactors.map(([name, score]) => ({
+      name,
+      score,
+      explanation: `This is the ${topFactors.indexOf([name, score]) + 1}${['st', 'nd', 'rd'][topFactors.indexOf([name, score])] || 'th'} highest risk factor for ${tokenName}.`,
+      impact: score >= 70 ? 'Significant risk - closely evaluate impact on investment thesis' : 'Moderate risk - requires monitoring'
+    })),
+    key_insights: [
+      `Token classification: ${isMeme ? 'Meme Token' : 'Utility Token'} (${memeConfidence}% confidence)`,
+      `Overall Risk Assessment: ${riskLevel} (${riskScore}/100)`,
+      `Recommendation: ${recommendation.replace(/_/g, ' ')}`
+    ]
+  };
+}

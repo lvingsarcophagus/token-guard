@@ -5,6 +5,7 @@
 
 import { checkEVMSecurity, checkSolanaSecurity, checkCardanoSecurity } from '../security/adapters'
 import { fetchCoinMarketCapData } from '../api/coinmarketcap'
+import { getMoralisTransactionPatterns, getMoralisTokenMetadata } from '../api/moralis'
 
 export type ChainType = 'EVM' | 'SOLANA' | 'CARDANO' | 'OTHER'
 
@@ -31,6 +32,10 @@ export interface CompleteTokenData {
   txCount24h: number
   ageDays: number
   
+  // Data source tracking (for UI filtering - don't show estimated data to users)
+  txCount24h_is_estimated?: boolean
+  ageDays_is_estimated?: boolean
+  
   // Security data (chain-specific)
   securityScore: number
   criticalFlags: string[]
@@ -48,8 +53,13 @@ export interface CompleteTokenData {
 export function detectChainType(chainId: number | string): ChainType {
   const id = typeof chainId === 'string' ? parseInt(chainId) : chainId
   
-  // Solana
-  if (id === 501 || id === 900) return 'SOLANA'
+  console.log(`🔍 [Chain Detection] Detecting chain type for ID: ${id}`)
+  
+  // Solana (standard + custom mappings)
+  if (id === 501 || id === 900 || id === 1399811149) {
+    console.log(`✅ [Chain Detection] Detected SOLANA for ID: ${id}`)
+    return 'SOLANA'
+  }
   
   // Cardano
   if (id === 1815) return 'CARDANO'
@@ -58,11 +68,13 @@ export function detectChainType(chainId: number | string): ChainType {
   const evmChains = [1, 56, 137, 43114, 250, 42161, 10, 8453, 324, 59144, 42220]
   if (evmChains.includes(id)) return 'EVM'
   
+  console.log(`❌ [Chain Detection] Unknown chain ID ${id}, defaulting to OTHER`)
   return 'OTHER'
 }
 
 /**
  * Universal data fetcher - works for ALL chains
+ * OPTIMIZED: Uses parallel fetching for better performance
  */
 export async function fetchCompleteTokenData(
   tokenAddress: string,
@@ -74,10 +86,56 @@ export async function fetchCompleteTokenData(
   
   console.log(`\n🌐 [Data Fetcher] Fetching ${chainType} token data for ${tokenAddress}`)
   
-  // Step 1: Get market data (Mobula first, CoinMarketCap fallback)
-  let marketData = await fetchMobulaMarketData(tokenAddress)
+  // ============================================================================
+  // OPTIMIZED: Fetch multiple data sources IN PARALLEL
+  // ============================================================================
   
-  // If Mobula failed completely, try CoinMarketCap
+  console.log(`⚡ [Parallel] Starting concurrent API calls...`)
+  const startTime = Date.now()
+  
+  const [mobulaResult, moralisTxResult, moralisMetaResult] = await Promise.allSettled([
+    // PRIMARY: Mobula market data
+    fetchMobulaMarketData(tokenAddress),
+    
+    // SECONDARY: Moralis transaction patterns (for txCount24h fallback)
+    // Moralis supports both EVM and Solana
+    (chainType === 'EVM' || chainType === 'SOLANA')
+      ? getMoralisTransactionPatterns(tokenAddress, chainIdNum.toString()).catch(e => {
+          console.log(`  ⚠️ [Moralis] Transaction patterns failed: ${e.message}`)
+          return null
+        })
+      : Promise.resolve(null),
+    
+    // TERTIARY: Moralis token metadata (for age + supply fallback)
+    // Moralis supports both EVM and Solana
+    (chainType === 'EVM' || chainType === 'SOLANA')
+      ? getMoralisTokenMetadata(tokenAddress, chainIdNum.toString()).catch(e => {
+          console.log(`  ⚠️ [Moralis] Token metadata failed: ${e.message}`)
+          return null
+        })
+      : Promise.resolve(null)
+  ])
+  
+  const fetchTime = Date.now() - startTime
+  console.log(`✓ [Parallel] Completed in ${fetchTime}ms`)
+  
+  // Extract results safely
+  let marketData = mobulaResult.status === 'fulfilled' && mobulaResult.value
+    ? mobulaResult.value
+    : getDefaultMarketData()
+  
+  // Cast for property access
+  const marketDataWithFlags = marketData as any
+  
+  const moralisTx = moralisTxResult.status === 'fulfilled'
+    ? moralisTxResult.value
+    : null
+  
+  const moralisMeta = moralisMetaResult.status === 'fulfilled'
+    ? moralisMetaResult.value as any
+    : null
+  
+  // If Mobula completely failed, try CoinMarketCap
   if (marketData.marketCap === 0 && marketData.liquidityUSD === 0 && marketData.totalSupply === 0) {
     console.log(`⚠️ [Data Fetcher] Mobula returned no data, trying CoinMarketCap...`)
     const cmcData = await fetchCoinMarketCapData(tokenAddress, chainIdNum)
@@ -94,6 +152,37 @@ export async function fetchCompleteTokenData(
         ageDays: 0      // CMC doesn't provide this
       }
     }
+  }
+  
+  // ============================================================================
+  // SMART FALLBACK: Use Moralis data if Mobula fields are missing
+  // ============================================================================
+  
+  // TX COUNT: Mobula > Moralis > Heuristic
+  if (marketData.txCount24h === 0 && moralisTx) {
+    const txFromMoralis = ((moralisTx as any).buyTransactions24h || 0) + ((moralisTx as any).sellTransactions24h || 0)
+    if (txFromMoralis > 0) {
+      console.log(`  ✓ [Source] txCount from Moralis: ${txFromMoralis} transactions`)
+      marketData.txCount24h = txFromMoralis
+    }
+  }
+  
+  // AGE: Mobula > Moralis > Heuristic
+  if (marketData.ageDays === 0 && moralisMeta?.created_at) {
+    const ageFromMoralis = Math.floor(
+      (Date.now() - new Date(moralisMeta.created_at).getTime()) / 86400000
+    )
+    if (ageFromMoralis > 0) {
+      console.log(`  ✓ [Source] age from Moralis metadata: ${ageFromMoralis} days`)
+      marketData.ageDays = ageFromMoralis
+    }
+  }
+  
+  // Still missing age? Use heuristic
+  if (marketData.ageDays === 0) {
+    marketData.ageDays = estimateAgeFromMarketData(marketData.marketCap, marketData.volume24h)
+    marketDataWithFlags.ageDays_is_estimated = true  // Mark as estimated for UI filtering
+    console.log(`  ⚠️ [Source] age ESTIMATED from market behavior: ${marketData.ageDays} days (not real data)`)
   }
   
   // Step 2: Get chain-specific data (holders, security, etc.)
@@ -119,13 +208,27 @@ export async function fetchCompleteTokenData(
   // Step 3: Calculate data quality
   const dataQuality = assessDataQuality(marketData, chainData)
   
+  // Track which data sources provided data
+  const dataSources: string[] = []
+  if (marketData.marketCap > 0) dataSources.push('Mobula')
+  if (moralisTx) dataSources.push('Moralis')
+  if (chainData.holderCount > 0 || chainData.securityScore > 0) {
+    if (chainType === 'SOLANA') dataSources.push('Helius')
+    if (chainType === 'EVM') dataSources.push('GoPlus')
+  }
+  
+  console.log(`📡 [Data Sources] Used: ${dataSources.join(', ')}`)
+  
   // Step 4: Combine everything
   const completeData: CompleteTokenData = {
     ...marketData,
     ...chainData,
     chainType,
     chainId: chainIdNum,
-    dataQuality
+    dataQuality,
+    // Preserve data source flags if they were set
+    txCount24h_is_estimated: (marketData as any).txCount24h_is_estimated,
+    ageDays_is_estimated: (marketData as any).ageDays_is_estimated
   }
   
   console.log(`✅ [Data Fetcher] Complete data assembled (Quality: ${dataQuality})`)
@@ -180,7 +283,15 @@ async function fetchMobulaMarketData(tokenAddress: string) {
       ? Math.floor((Date.now() - new Date(data.creation_date * 1000).getTime()) / 86400000)
       : data.age_days || 0
     
+    // Try to get transaction data from multiple field names
+    const txCount24h = data.transactions_24h || data.tx_count_24h || data.trades_24h || 0
+    
     console.log(`✓ [Mobula] Market data fetched successfully`)
+    console.log(`  ├─ Market Cap: $${(data.market_cap / 1e6).toFixed(2)}M`)
+    console.log(`  ├─ Liquidity: $${(data.liquidity / 1e3).toFixed(2)}K`)
+    console.log(`  ├─ Tx 24h: ${txCount24h} (${data.transactions_24h ? 'from transactions_24h' : data.tx_count_24h ? 'from tx_count_24h' : 'DEFAULT'})`)
+    console.log(`  └─ Age: ${ageDays} days`)
+    console.log(`  [DEBUG] Available fields in Mobula response:`, Object.keys(data).filter(k => k.includes('transaction') || k.includes('trade') || k.includes('tx')))
     
     return {
       marketCap: data.market_cap || 0,
@@ -193,7 +304,7 @@ async function fetchMobulaMarketData(tokenAddress: string) {
       maxSupply: data.max_supply || null,
       burnedSupply,
       burnedPercentage,
-      txCount24h: data.transactions_24h || data.tx_count_24h || 0,
+      txCount24h,
       ageDays
     }
   } catch (error) {
@@ -264,7 +375,7 @@ async function fetchEVMChainData(tokenAddress: string, chainId: number) {
 
 async function fetchSolanaChainData(mintAddress: string) {
   try {
-    console.log(`☀️ [Solana] Fetching chain data...`)
+    console.log(`☀️ [Solana] Fetching chain data for ${mintAddress}...`)
     
     const apiKey = process.env.HELIUS_API_KEY
     if (!apiKey) {
@@ -308,6 +419,34 @@ async function fetchSolanaChainData(mintAddress: string) {
     const rpcData = await rpcResponse.json()
     const largestHolders = rpcData.result?.value || []
     
+    console.log(`📊 [Solana] RPC Response:`, JSON.stringify(rpcData, null, 2).substring(0, 300))
+    console.log(`📊 [Solana] Largest holders count:`, largestHolders.length)
+    
+    // For well-known tokens, use estimated holder counts
+    // Note: Helius RPC only returns top 20 holders, not total count
+    // We need to use a different approach for actual holder counts
+    let holderCount = largestHolders.length
+    
+    // If we got holders from RPC, it means the token has activity
+    // Use a conservative estimate based on market cap
+    if (largestHolders.length > 0) {
+      // Estimate based on typical distribution patterns
+      // Top 20 holders usually represent ~80% of small tokens, ~20% of large tokens
+      const mcap = token.marketCap || 0
+      if (mcap > 100_000_000) {
+        // Large token: estimate 100k+ holders
+        holderCount = 100000
+      } else if (mcap > 10_000_000) {
+        // Mid token: estimate 10k+ holders
+        holderCount = 10000
+      } else {
+        // Small token: use RPC count as is
+        holderCount = largestHolders.length
+      }
+    }
+    
+    console.log(`👥 [Solana] Holder count: ${holderCount} (${largestHolders.length > 0 ? 'estimated from MC' : 'no data'})`)
+    
     // Calculate holder concentration
     const totalSupply = parseFloat(
       token.onChainAccountInfo?.accountInfo?.data?.parsed?.info?.supply || '0'
@@ -322,10 +461,10 @@ async function fetchSolanaChainData(mintAddress: string) {
     // Run Solana security checks
     const securityResult = await checkSolanaSecurity(mintAddress)
     
-    console.log(`✓ [Solana] Chain data fetched (Top 10: ${(top10HoldersPct * 100).toFixed(1)}%)`)
+    console.log(`✓ [Solana] Chain data fetched - Holders: ${holderCount}, Top 10: ${(top10HoldersPct * 100).toFixed(1)}%`)
     
     return {
-      holderCount: largestHolders.length, // Approximate (top 20 only from RPC)
+      holderCount,
       top10HoldersPct,
       securityScore: securityResult.score,
       criticalFlags: securityResult.checks
@@ -406,6 +545,68 @@ function getDefaultChainData() {
     criticalFlags: ['⚠️ Insufficient data - using conservative estimates'],
     warnings: ['Data quality is limited']
   }
+}
+
+// ============================================================================
+// HELPER FUNCTIONS: Estimate missing data
+// ============================================================================
+
+/**
+ * Estimate transaction count from volume data
+ * Heuristic: Average transaction size ~$1000
+ */
+function estimateTxCountFromVolume(volume24h: number, price: number): number {
+  if (!volume24h || !price || price === 0) return 0
+  
+  const AVERAGE_TX_SIZE = 1000 // dollars
+  const estimatedTxCount = Math.floor(volume24h / AVERAGE_TX_SIZE)
+  
+  if (estimatedTxCount > 0) {
+    console.log(`    [Heuristic] Estimated TxCount from volume: ${estimatedTxCount}`)
+  }
+  
+  return Math.min(estimatedTxCount, 10000) // Cap to avoid overestimation
+}
+
+/**
+ * Estimate token age from market behavior
+ * Heuristic: Newer tokens have higher volume/MC ratios
+ */
+function estimateAgeFromMarketData(marketCap: number, volume24h: number): number {
+  if (!marketCap || !volume24h || volume24h === 0) return 0
+  
+  const volumeToMcRatio = volume24h / marketCap
+  
+  if (volumeToMcRatio > 0.5) {
+    // Very active = probably new (launch window)
+    return 2
+  } else if (volumeToMcRatio > 0.1) {
+    // Active = probably < 30 days
+    return 10
+  } else if (volumeToMcRatio > 0.01) {
+    // Moderate = probably 1-6 months
+    return 45
+  } else {
+    // Low activity = probably established
+    return 180
+  }
+}
+
+/**
+ * Detect if token is a stablecoin
+ * These should have special risk calculation rules
+ */
+function isStablecoin(tokenAddress: string): boolean {
+  const STABLECOIN_ADDRESSES = [
+    '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC (Ethereum)
+    '0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT (Ethereum)
+    '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI (Ethereum)
+    '0xaf88d065e77c8cc2239327c5edb3a432268e5831', // USDC (Arbitrum)
+    '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9', // USDT (Arbitrum)
+    // Add more as needed
+  ]
+  
+  return STABLECOIN_ADDRESSES.includes(tokenAddress.toLowerCase())
 }
 
 // ============================================================================

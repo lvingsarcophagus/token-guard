@@ -53,10 +53,16 @@ function adaptCompleteToLegacy(completeData: CompleteTokenData): TokenData {
     txCount24h: completeData.txCount24h,
     ageDays: completeData.ageDays,
     
+    // Chain identifier (CRITICAL for Solana-specific contract control checks)
+    chain: completeData.chainType,
+    
     // Security flags from chain adapters (converted to GoPlus format)
     is_honeypot: completeData.criticalFlags.some(f => f.toLowerCase().includes('honeypot')),
     is_mintable: completeData.criticalFlags.some(f => f.toLowerCase().includes('mintable')),
     owner_renounced: !completeData.criticalFlags.some(f => f.toLowerCase().includes('owner control')),
+    
+    // Solana-specific: Freeze authority detection
+    freeze_authority_exists: completeData.criticalFlags.some(f => f.toLowerCase().includes('freeze authority')),
     
     // Tax data (estimate from warnings)
     buy_tax: 0, // Would need to parse from warnings
@@ -398,9 +404,42 @@ export async function POST(req: NextRequest) {
         console.error('Failed to save to Firestore:', firestoreError)
         // Don't fail the request if Firestore fails
       }
+
+      // Cache AI summary if available
+      try {
+        if (result.ai_summary) {
+          await setCachedTokenData(tokenAddress, {
+            address: tokenAddress,
+            name: metadata?.tokenName || tokenAddress.substring(0, 8),
+            symbol: metadata?.tokenSymbol || 'TOKEN',
+            aiSummary: result.ai_summary,
+            chainId: chainId
+          })
+          console.log(`✅ Cached AI summary for ${tokenAddress}`)
+        }
+      } catch (cacheError) {
+        console.error('Failed to cache AI summary:', cacheError)
+        // Don't fail the request if caching fails
+      }
     }
 
-    return NextResponse.json(result)
+    return NextResponse.json({
+      ...result,
+      raw_data: {
+        marketCap: tokenData.marketCap,
+        fdv: tokenData.fdv,
+        liquidityUSD: tokenData.liquidityUSD,
+        holderCount: tokenData.holderCount,
+        top10HoldersPct: tokenData.top10HoldersPct,
+        // ONLY show txCount if it's real data (not estimated)
+        ...(!(tokenData as any).txCount24h_is_estimated && { txCount24h: tokenData.txCount24h }),
+        // ONLY show ageDays if it's real data (not estimated)
+        ...(!(tokenData as any).ageDays_is_estimated && { ageDays: tokenData.ageDays }),
+        is_mintable: tokenData.is_mintable,
+        lp_locked: tokenData.lp_locked,
+        owner_renounced: tokenData.owner_renounced
+      }
+    })
   } catch (error: any) {
     console.error('[API] Error:', error)
     return NextResponse.json(

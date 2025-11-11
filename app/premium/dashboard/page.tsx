@@ -6,7 +6,9 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
 import { auth } from '@/lib/firebase'
 import Navbar from '@/components/navbar'
+import AIAnalysisAccordion from '@/components/ai-analysis-accordion'
 import { MorphingSquare } from '@/components/ui/morphing-square'
+import TokenSearchComponent from '@/components/token-search-cmc'
 import { 
   Shield, TrendingUp, TrendingDown, Activity, Users, Droplet,
   Zap, Crown, AlertCircle, CheckCircle, Sparkles, BarChart3,
@@ -93,6 +95,7 @@ export default function PremiumDashboard() {
   const [tokenSuggestions, setTokenSuggestions] = useState<any[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [showTokenSearch, setShowTokenSearch] = useState(false)
   
   // Historical data states
   const [timeframe, setTimeframe] = useState('30D')
@@ -250,8 +253,8 @@ export default function PremiumDashboard() {
       return
     }
 
-    // If it's a contract address (0x...), don't show suggestions
-    if (query.startsWith('0x')) {
+    // If it's a contract address (0x... or Solana address), don't show suggestions
+    if (query.startsWith('0x') || query.length > 40) {
       setTokenSuggestions([])
       setShowSuggestions(false)
       return
@@ -259,13 +262,25 @@ export default function PremiumDashboard() {
 
     setLoadingSuggestions(true)
     try {
-      const response = await fetch(`/api/token/search?query=${encodeURIComponent(query)}`)
+      // Use CoinMarketCap search (faster and supports Solana)
+      const response = await fetch(`/api/search-token?query=${encodeURIComponent(query)}`)
       
       if (response.ok) {
         const data = await response.json()
-        if (data.success && data.tokens) {
-          setTokenSuggestions(data.tokens)
-          setShowSuggestions(data.tokens.length > 0)
+        if (data.results && data.results.length > 0) {
+          // Transform CMC results to match expected format
+          const transformedTokens = data.results.map((token: any) => ({
+            symbol: token.symbol,
+            name: token.name,
+            address: token.address,
+            chainId: getChainIdFromName(token.chain),
+            chainName: token.chain,
+            marketCap: null, // CMC doesn't return this in search
+            logo: null
+          })).filter((t: any) => t.address) // Only show tokens with addresses
+          
+          setTokenSuggestions(transformedTokens)
+          setShowSuggestions(transformedTokens.length > 0)
         }
       }
     } catch (error) {
@@ -275,10 +290,62 @@ export default function PremiumDashboard() {
     }
   }
 
+  // Helper to convert chain name to chainId
+  const getChainIdFromName = (chainName: string): string => {
+    if (!chainName) return '1'
+    const lower = chainName.toLowerCase()
+    
+    if (lower.includes('ethereum')) return '1'
+    if (lower.includes('bsc') || lower.includes('binance')) return '56'
+    if (lower.includes('polygon')) return '137'
+    if (lower.includes('avalanche')) return '43114'
+    if (lower.includes('arbitrum')) return '42161'
+    if (lower.includes('solana')) return '1399811149'
+    if (lower.includes('optimism')) return '10'
+    if (lower.includes('base')) return '8453'
+    
+    return '1' // Default to Ethereum
+  }
+
   const handleSelectSuggestion = (token: any) => {
     setSearchQuery(token.address)
     setShowSuggestions(false)
     setTokenSuggestions([])
+    
+    // Set the correct chain based on token data
+    if (token.chainName) {
+      const chainLower = token.chainName.toLowerCase()
+      if (chainLower.includes('ethereum')) setSelectedChain('ethereum')
+      else if (chainLower.includes('bsc') || chainLower.includes('binance')) setSelectedChain('bsc')
+      else if (chainLower.includes('polygon')) setSelectedChain('polygon')
+      else if (chainLower.includes('avalanche')) setSelectedChain('avalanche')
+      else if (chainLower.includes('solana')) setSelectedChain('solana')
+      
+      console.log(`[Dashboard] Selected chain: ${chainLower} -> ${selectedChain}`)
+    }
+    
+    // Automatically trigger scan
+    setTimeout(() => {
+      handleScan()
+    }, 100)
+  }
+
+  // Handle token selection from CMC search
+  const handleTokenSelectFromSearch = async (address: string, chain: string, symbol: string, name: string) => {
+    console.log(`[Premium Dashboard] Token selected from search: ${name} (${symbol}) on ${chain}`)
+    console.log(`[Premium Dashboard] Address: ${address}`)
+    
+    // Set the search query to the address
+    setSearchQuery(address)
+    
+    // Set the chain based on CMC data
+    const chainLower = chain.toLowerCase()
+    if (chainLower.includes('ethereum')) setSelectedChain('ethereum')
+    else if (chainLower.includes('bsc') || chainLower.includes('binance')) setSelectedChain('bsc')
+    else if (chainLower.includes('polygon')) setSelectedChain('polygon')
+    else if (chainLower.includes('avalanche')) setSelectedChain('avalanche')
+    else if (chainLower.includes('solana')) setSelectedChain('solana')
+    
     // Automatically trigger scan
     setTimeout(() => {
       handleScan()
@@ -299,6 +366,11 @@ export default function PremiumDashboard() {
       return
     }
     
+    console.log(`[Scanner] ========== NEW SCAN ==========`)
+    console.log(`[Scanner] Query: ${searchQuery}`)
+    console.log(`[Scanner] Chain: ${selectedChain}`)
+    console.log(`[Scanner] Manual Classification: ${manualTokenType || 'AUTO DETECT'}`)
+    
     setScanning(true)
     setScanError('')
     setSelectedToken(null)
@@ -309,20 +381,33 @@ export default function PremiumDashboard() {
     try {
       console.log('[Scanner] Starting scan for:', searchQuery)
       
-      // If input is not an address (0x...), try to resolve it to an address first
+      // Check if input is an address (supports both EVM and Solana)
       let addressToScan = searchQuery
-      const isAddress = searchQuery.startsWith('0x') || searchQuery.length >= 32
+      const isEVMAddress = searchQuery.startsWith('0x') && searchQuery.length === 42
+      const isSolanaAddress = searchQuery.length >= 32 && searchQuery.length <= 44 && !searchQuery.startsWith('0x')
+      const isAddress = isEVMAddress || isSolanaAddress
       
       if (!isAddress) {
         console.log('[Scanner] Not an address, searching for token:', searchQuery)
         try {
-          const searchRes = await fetch(`/api/token/search?query=${encodeURIComponent(searchQuery)}`)
+          // Use faster CoinMarketCap search
+          const searchRes = await fetch(`/api/search-token?query=${encodeURIComponent(searchQuery)}`)
           if (searchRes.ok) {
             const searchData = await searchRes.json()
-            if (searchData.tokens && searchData.tokens.length > 0) {
+            if (searchData.results && searchData.results.length > 0) {
               // Use the first matching token's address
-              addressToScan = searchData.tokens[0].address
+              addressToScan = searchData.results[0].address
               console.log('[Scanner] Resolved to address:', addressToScan)
+              
+              // Also update the chain selector if we got chain info
+              const chainName = searchData.results[0].chain?.toLowerCase()
+              if (chainName) {
+                if (chainName.includes('ethereum')) setSelectedChain('ethereum')
+                else if (chainName.includes('bsc') || chainName.includes('binance')) setSelectedChain('bsc')
+                else if (chainName.includes('polygon')) setSelectedChain('polygon')
+                else if (chainName.includes('avalanche')) setSelectedChain('avalanche')
+                else if (chainName.includes('solana')) setSelectedChain('solana')
+              }
             } else {
               console.log('[Scanner] No matching tokens found, proceeding with original query')
             }
@@ -337,14 +422,19 @@ export default function PremiumDashboard() {
       
       setScannedToken(data)
       
-      // Check if we have a valid contract address (not just a symbol)
-      const hasValidAddress = data.address && 
-                             data.address !== 'N/A' && 
-                             data.address.startsWith('0x') && 
-                             data.chainInfo?.chainId
+      // Check if we have a valid contract address (supports both EVM and Solana)
+      const isValidEVMAddress = data.address && data.address !== 'N/A' && data.address.startsWith('0x')
+      const isValidSolanaAddress = data.address && data.address !== 'N/A' && data.address.length >= 32 && data.address.length <= 44 && !data.address.startsWith('0x')
+      const hasValidAddress = (isValidEVMAddress || isValidSolanaAddress) && data.chainInfo?.chainId
+      
+      // Override chainId for Solana if needed
+      if (isValidSolanaAddress && data.chainInfo) {
+        console.log('[Scanner] Detected Solana address, setting chainId to 1399811149')
+        ;(data.chainInfo as any).chainId = 1399811149
+      }
       
       if (hasValidAddress && data.chainInfo) {
-        console.log('[Scanner] Analyzing token:', data.address, 'on chain:', data.chainInfo.chainId)
+        console.log('[Scanner] Analyzing token:', data.address, 'on chain:', data.chainInfo.chainId, '(Solana:', isValidSolanaAddress, ')')
         
         // Prepare metadata for AI meme detection and Twitter metrics
         const secData = data.securityData as any
@@ -970,122 +1060,143 @@ export default function PremiumDashboard() {
           </div>
         )}
 
-        {/* Token Scanner */}
-        <div className="border border-white/20 bg-black/60 p-6 mb-8">
-          <h2 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
-            <Search className="w-4 h-4" />
-            SCAN TOKEN
-          </h2>
+        {/* Token Scanner - Glassmorphism */}
+        <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 mb-8 shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+          <div className="relative z-10">
+            <h2 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
+              <Search className="w-4 h-4" />
+              SCAN TOKEN
+            </h2>
 
-          {/* Chain Selector */}
+          {/* Chain Selector Dropdown */}
           <div className="mb-4">
             <label className="text-white/60 font-mono text-[10px] tracking-wider mb-2 block">
               SELECT BLOCKCHAIN
             </label>
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { id: 'ethereum', name: 'ETHEREUM', icon: '⟠' },
-                { id: 'bsc', name: 'BSC', icon: '🔶' },
-                { id: 'polygon', name: 'POLYGON', icon: '🟣' },
-                { id: 'avalanche', name: 'AVALANCHE', icon: '🔺' },
-                { id: 'solana', name: 'SOLANA', icon: '🌟' }
-              ].map((chain) => (
-                <button
-                  key={chain.id}
-                  onClick={() => setSelectedChain(chain.id as any)}
-                  className={`px-4 py-2 font-mono text-[10px] tracking-wider border transition-all ${
-                    selectedChain === chain.id
-                      ? 'bg-white text-black border-white'
-                      : 'bg-black text-white/60 border-white/20 hover:border-white/40'
-                  }`}
-                >
-                  <span className="mr-1">{chain.icon}</span>
-                  {chain.name}
-                </button>
-              ))}
-            </div>
+            <select
+              value={selectedChain}
+              onChange={(e) => setSelectedChain(e.target.value as any)}
+              className="w-full px-4 py-3 bg-black border border-white/20 text-white font-mono text-sm tracking-wider focus:border-white/40 focus:outline-none transition-all appearance-none cursor-pointer hover:border-white/30"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' opacity='0.6'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.75rem center',
+                backgroundSize: '1.25rem',
+                paddingRight: '2.5rem'
+              }}
+            >
+              <option value="ethereum">⟠ ETHEREUM</option>
+              <option value="bsc">🔶 BSC (BNB CHAIN)</option>
+              <option value="polygon">🟣 POLYGON</option>
+              <option value="avalanche">🔺 AVALANCHE</option>
+              <option value="solana">🌟 SOLANA</option>
+            </select>
           </div>
 
-          {/* Token Type Override (Manual Classification) */}
+          {/* Token Classification Dropdown */}
           <div className="mb-4">
             <label className="text-white/60 font-mono text-[10px] tracking-wider mb-2 block">
               TOKEN CLASSIFICATION (OPTIONAL)
             </label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setManualTokenType(null)}
-                className={`flex-1 px-4 py-2 font-mono text-[10px] tracking-wider border transition-all ${
-                  manualTokenType === null
-                    ? 'bg-white text-black border-white'
-                    : 'bg-black text-white/60 border-white/20 hover:border-white/40'
-                }`}
-              >
-                🤖 AUTO DETECT
-              </button>
-              <button
-                onClick={() => setManualTokenType('MEME_TOKEN')}
-                className={`flex-1 px-4 py-2 font-mono text-[10px] tracking-wider border transition-all ${
-                  manualTokenType === 'MEME_TOKEN'
-                    ? 'bg-purple-500 text-white border-purple-500'
-                    : 'bg-black text-white/60 border-white/20 hover:border-purple-500/40'
-                }`}
-              >
-                🎭 MEME TOKEN
-              </button>
-              <button
-                onClick={() => setManualTokenType('UTILITY_TOKEN')}
-                className={`flex-1 px-4 py-2 font-mono text-[10px] tracking-wider border transition-all ${
-                  manualTokenType === 'UTILITY_TOKEN'
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-black text-white/60 border-white/20 hover:border-blue-500/40'
-                }`}
-              >
-                🏢 UTILITY TOKEN
-              </button>
-            </div>
-            <p className="text-white/40 font-mono text-[9px] mt-2">
-              Override AI classification. Meme tokens have minimum 55/100 risk score.
+            <select
+              value={manualTokenType || 'auto'}
+              onChange={(e) => setManualTokenType(e.target.value === 'auto' ? null : e.target.value as 'MEME_TOKEN' | 'UTILITY_TOKEN')}
+              className={`w-full px-4 py-3 bg-black border text-white font-mono text-sm tracking-wider focus:border-white/40 focus:outline-none transition-all appearance-none cursor-pointer hover:border-white/30 ${
+                manualTokenType === 'MEME_TOKEN' ? 'border-yellow-500/50' : 'border-white/20'
+              }`}
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' opacity='0.6'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.75rem center',
+                backgroundSize: '1.25rem',
+                paddingRight: '2.5rem'
+              }}
+            >
+              <option value="auto">🤖 AUTO DETECT (AI Classification)</option>
+              <option value="MEME_TOKEN">🎭 MEME TOKEN (Speculative, +15 risk)</option>
+              <option value="UTILITY_TOKEN">🏢 UTILITY TOKEN (Functional)</option>
+            </select>
+            <p className={`font-mono text-[9px] mt-2 ${
+              manualTokenType === 'MEME_TOKEN' ? 'text-yellow-400' : 'text-white/40'
+            }`}>
+              {manualTokenType === 'MEME_TOKEN' ? (
+                <span>⚠️ MEME TOKEN SELECTED - Adding +15 risk points to next scan</span>
+              ) : (
+                <span>Override AI classification. Meme tokens get +15 risk points added.</span>
+              )}
             </p>
           </div>
           
-          <div className="relative token-search-container">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  searchTokenSuggestions(e.target.value)
-                }}
-                onKeyPress={(e) => e.key === 'Enter' && handleScan()}
-                onFocus={() => {
-                  if (tokenSuggestions.length > 0) {
-                    setShowSuggestions(true)
-                  }
-                }}
-                placeholder="ENTER CONTRACT ADDRESS OR SYMBOL..."
-                className="flex-1 bg-black border border-white/30 text-white px-4 py-3 font-mono text-xs tracking-wider focus:outline-none focus:border-white placeholder:text-white/40"
-                disabled={scanning}
-              />
+          {/* Toggle Button and Reset */}
+          <div className="flex justify-between items-center mb-3">
+            {manualTokenType && (
               <button
-                onClick={handleScan}
-                disabled={scanning || !searchQuery.trim()}
-                className="px-6 py-3 bg-white text-black font-mono text-xs tracking-wider hover:bg-white/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setManualTokenType(null)}
+                className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 font-mono text-[10px] border border-yellow-500/30 transition-colors tracking-wider"
               >
-                {scanning ? (
-                  <>
-                    <Loader2 className="w-4 h-4 inline animate-spin mr-2" />
-                    SCANNING...
-                  </>
-                ) : (
-                  'SCAN'
-                )}
+                ↺ RESET CLASSIFICATION
+              </button>
+            )}
+            <div className={manualTokenType ? '' : 'ml-auto'}>
+              <button
+                onClick={() => setShowTokenSearch(!showTokenSearch)}
+                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white font-mono text-[10px] border border-white/30 transition-colors tracking-wider"
+              >
+                {showTokenSearch ? '📝 MANUAL INPUT' : '🔍 SEARCH BY NAME'}
               </button>
             </div>
+          </div>
+
+          <div className="relative z-50 token-search-container">
+            {showTokenSearch ? (
+              /* Token Search by Name/Symbol */
+              <div className="space-y-3">
+                <TokenSearchComponent onTokenSelect={handleTokenSelectFromSearch} />
+                <div className="text-[10px] font-mono text-white/40 tracking-wider">
+                  💡 SEARCH FOR TOKENS BY NAME OR SYMBOL (E.G., BONK, DOGWIFHAT)
+                </div>
+              </div>
+            ) : (
+              /* Traditional Address/Symbol Input */
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    searchTokenSuggestions(e.target.value)
+                  }}
+                  onKeyPress={(e) => e.key === 'Enter' && handleScan()}
+                  onFocus={() => {
+                    if (tokenSuggestions.length > 0) {
+                      setShowSuggestions(true)
+                    }
+                  }}
+                  placeholder="ENTER CONTRACT ADDRESS OR SYMBOL..."
+                  className="flex-1 bg-black border border-white/30 text-white px-4 py-3 font-mono text-xs tracking-wider focus:outline-none focus:border-white placeholder:text-white/40"
+                  disabled={scanning}
+                />
+                <button
+                  onClick={handleScan}
+                  disabled={scanning || !searchQuery.trim()}
+                  className="px-6 py-3 bg-white text-black font-mono text-xs tracking-wider hover:bg-white/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {scanning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 inline animate-spin mr-2" />
+                      SCANNING...
+                    </>
+                  ) : (
+                    'SCAN'
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* Token Suggestions Dropdown */}
             {showSuggestions && tokenSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-white/30 z-50 max-h-[400px] overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-white/30 z-[100] max-h-[400px] overflow-y-auto shadow-2xl">
                 {loadingSuggestions && (
                   <div className="p-4 text-center">
                     <Loader2 className="w-4 h-4 inline animate-spin text-white/60" />
@@ -1133,11 +1244,14 @@ export default function PremiumDashboard() {
               <p className="text-red-500 font-mono text-xs">{scanError}</p>
             </div>
           )}
+          </div>
         </div>
 
-        {/* Scan Results */}
+        {/* Scan Results - Glassmorphism */}
         {selectedToken && (
-          <div id="scan-results" className="border border-white/20 bg-black/60 p-6 mb-8">
+          <div id="scan-results" className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 mb-8 shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+            <div className="relative z-10">
             {/* Token Header with Price & Info */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
               {/* Left: Token Info */}
@@ -1313,7 +1427,68 @@ export default function PremiumDashboard() {
               </button>
             </div>
 
-            {/* Risk Breakdown */}
+            {/* Chain-Specific Security Info */}
+            {selectedToken.chain && (
+              <div className="border border-white/10 bg-white/5 p-4 mb-6">
+                <h3 className="text-white font-mono text-xs tracking-wider mb-3 flex items-center gap-2">
+                  🔗 {selectedToken.chain.toUpperCase()} CHAIN ANALYSIS
+                </h3>
+                {selectedToken.chain.toLowerCase() === 'solana' ? (
+                  <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                    <div>
+                      <span className="text-white/60">Freeze Authority:</span>
+                      <span className={`ml-2 font-bold ${selectedToken.securityData?.freezeAuthority ? 'text-red-400' : 'text-green-400'}`}>
+                        {selectedToken.securityData?.freezeAuthority ? 'ACTIVE ⚠️' : 'REVOKED ✓'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Mint Authority:</span>
+                      <span className={`ml-2 font-bold ${selectedToken.securityData?.mintAuthority ? 'text-red-400' : 'text-green-400'}`}>
+                        {selectedToken.securityData?.mintAuthority ? 'ACTIVE ⚠️' : 'REVOKED ✓'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">SPL Token:</span>
+                      <span className="ml-2 text-white">YES</span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Data Source:</span>
+                      <span className="ml-2 text-cyan-400">Helius + Moralis</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                    <div>
+                      <span className="text-white/60">Contract Verified:</span>
+                      <span className={`ml-2 font-bold ${selectedToken.securityData?.isVerified ? 'text-green-400' : 'text-yellow-400'}`}>
+                        {selectedToken.securityData?.isVerified ? 'YES ✓' : 'NO ⚠️'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Ownership:</span>
+                      <span className={`ml-2 font-bold ${selectedToken.securityData?.ownershipRenounced ? 'text-green-400' : 'text-yellow-400'}`}>
+                        {selectedToken.securityData?.ownershipRenounced ? 'RENOUNCED ✓' : 'ACTIVE ⚠️'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Proxy Contract:</span>
+                      <span className={`ml-2 font-bold ${selectedToken.securityData?.isProxy ? 'text-yellow-400' : 'text-green-400'}`}>
+                        {selectedToken.securityData?.isProxy ? 'YES ⚠️' : 'NO ✓'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Data Source:</span>
+                      <span className="ml-2 text-cyan-400">GoPlus + Moralis</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Risk Breakdown - All 10 Factors */}
+            <div className="mb-4">
+              <h3 className="text-white font-mono text-xs tracking-wider mb-3">RISK FACTORS (10-POINT ANALYSIS)</h3>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {Object.entries(selectedToken.factors).map(([key, value]: [string, any]) => (
                 <div key={key} className="border border-white/10 p-4">
@@ -1333,16 +1508,25 @@ export default function PremiumDashboard() {
               ))}
             </div>
 
-            {/* AI Insights */}
-            {selectedToken.ai_insights && (
-              <div className="border border-purple-500/50 bg-purple-500/10 p-4 mb-4">
-                <h3 className="text-purple-400 font-mono text-xs tracking-wider mb-3 flex items-center gap-2">
+            {/* AI Analysis Accordion (replaces old AI Meme Detection) */}
+            {selectedToken.ai_summary && (
+              <AIAnalysisAccordion
+                aiSummary={selectedToken.ai_summary}
+                tokenName={selectedToken.name || 'Token'}
+                riskLevel={selectedToken.risk_level || 'MEDIUM'}
+              />
+            )}
+
+            {/* Fallback to old AI Insights if no AI Summary */}
+            {!selectedToken.ai_summary && selectedToken.ai_insights && (
+              <div className="border border-gray-700/50 bg-gray-900/30 p-4 mb-4 rounded-lg">
+                <h3 className="text-gray-300 font-mono text-xs tracking-wider mb-3 flex items-center gap-2">
                   <span className="text-lg">🤖</span>
-                  AI MEME DETECTION
+                  AI CLASSIFICATION
                 </h3>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-white/60 font-mono text-[10px]">CLASSIFICATION</span>
+                    <span className="text-gray-500 font-mono text-[10px]">TYPE</span>
                     <span className={`font-mono text-xs font-bold ${
                       selectedToken.ai_insights.classification === 'MEME_TOKEN' ? 'text-yellow-400' : 'text-blue-400'
                     }`}>
@@ -1350,22 +1534,9 @@ export default function PremiumDashboard() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-white/60 font-mono text-[10px]">CONFIDENCE</span>
-                    <span className="text-white font-mono text-xs">{selectedToken.ai_insights.confidence}%</span>
+                    <span className="text-gray-500 font-mono text-[10px]">CONFIDENCE</span>
+                    <span className="text-gray-200 font-mono text-xs">{selectedToken.ai_insights.confidence}%</span>
                   </div>
-                  {selectedToken.ai_insights.reasoning && (
-                    <div className="mt-2 p-2 bg-black/40 border border-purple-500/30">
-                      <p className="text-purple-300 font-mono text-[10px] leading-relaxed">
-                        {selectedToken.ai_insights.reasoning}
-                      </p>
-                    </div>
-                  )}
-                  {selectedToken.ai_insights.classification === 'MEME_TOKEN' && (
-                    <div className="mt-2 flex items-center gap-2 text-yellow-400 font-mono text-[10px]">
-                      <AlertTriangle className="w-3 h-3" />
-                      <span>Meme tokens have minimum 55/100 risk score due to speculative nature</span>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -1451,15 +1622,18 @@ export default function PremiumDashboard() {
                 </ul>
               </div>
             )}
+            </div>
           </div>
         )}
 
-        {/* Watchlist */}
-        <div className="border border-white/20 bg-black/60 p-6 mb-8">
-          <h2 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
-            <Eye className="w-4 h-4" />
-            WATCHLIST
-          </h2>
+        {/* Watchlist - Glassmorphism */}
+        <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 mb-8 shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+          <div className="relative z-10">
+            <h2 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
+              <Eye className="w-4 h-4" />
+              WATCHLIST
+            </h2>
           
           {watchlist.length === 0 ? (
             <div className="text-center py-12 text-white/40">
@@ -1547,15 +1721,18 @@ export default function PremiumDashboard() {
               ))}
             </div>
           )}
+          </div>
         </div>
 
-        {/* Historical Analytics - Enhanced Section - Only show when token is selected */}
+        {/* Historical Analytics - Glassmorphism */}
         {selectedToken && (
-        <div className="border border-white/20 bg-black/60 p-6 mb-8">
-          <h2 className="text-white font-mono text-xs tracking-wider mb-6 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" />
-            HISTORICAL ANALYTICS - {selectedToken.symbol}
-          </h2>
+        <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 mb-8 shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+          <div className="relative z-10">
+            <h2 className="text-white font-mono text-xs tracking-wider mb-6 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              HISTORICAL ANALYTICS - {selectedToken.symbol}
+            </h2>
 
           {/* Timeframe Selector */}
           <div className="flex gap-2 mb-6">
@@ -1781,18 +1958,21 @@ export default function PremiumDashboard() {
               )}
             </div>
           </div>
+          </div>
         </div>
         )}
 
-        {/* Advanced Insights Section - Only show when token is selected */}
+        {/* Advanced Insights Section - Glassmorphism */}
         {selectedToken && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Market Sentiment */}
-          <div className="border border-white/20 bg-black/60 p-6">
-            <h3 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              MARKET SENTIMENT
-            </h3>
+          <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+            <div className="relative z-10">
+              <h3 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                MARKET SENTIMENT
+              </h3>
             {loadingInsights ? (
               <div className="flex items-center justify-center h-32">
                 <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
@@ -1845,14 +2025,17 @@ export default function PremiumDashboard() {
                 </p>
               </div>
             )}
+            </div>
           </div>
 
           {/* Security Metrics */}
-          <div className="border border-white/20 bg-black/60 p-6">
-            <h3 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
-              <BadgeCheck className="w-4 h-4" />
-              SECURITY METRICS
-            </h3>
+          <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+            <div className="relative z-10">
+              <h3 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
+                <BadgeCheck className="w-4 h-4" />
+                SECURITY METRICS
+              </h3>
             {loadingInsights ? (
               <div className="flex items-center justify-center h-32">
                 <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
@@ -1912,14 +2095,17 @@ export default function PremiumDashboard() {
                 </p>
               </div>
             )}
+            </div>
           </div>
 
           {/* Top Holders Distribution */}
-          <div className="border border-white/20 bg-black/60 p-6">
-            <h3 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              TOP HOLDERS SHARE
-            </h3>
+          <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+            <div className="relative z-10">
+              <h3 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                TOP HOLDERS SHARE
+              </h3>
             {loadingInsights ? (
               <div className="flex items-center justify-center h-32">
                 <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
@@ -1974,18 +2160,22 @@ export default function PremiumDashboard() {
                 </p>
               </div>
             )}
+            </div>
           </div>
         </div>
         )}
 
-        {/* Recent Activity Feed */}
-        <div className="border border-white/20 bg-black/60 p-6">
-          <h3 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            RECENT ACTIVITY FEED
-          </h3>
-          <div className="flex items-center justify-center h-64">
-            <p className="text-white/40 font-mono text-xs">Recent transactions will load here</p>
+        {/* Recent Activity Feed - Glassmorphism */}
+        <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+          <div className="relative z-10">
+            <h3 className="text-white font-mono text-xs tracking-wider mb-4 flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              RECENT ACTIVITY FEED
+            </h3>
+            <div className="flex items-center justify-center h-64">
+              <p className="text-white/40 font-mono text-xs">Transaction feed coming soon - currently tracking via Analytics section</p>
+            </div>
           </div>
         </div>
       </main>
@@ -1995,13 +2185,16 @@ export default function PremiumDashboard() {
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode, label: string, value: number }) {
   return (
-    <div className="border border-white/20 bg-black/60 p-6 hover:border-white/40 transition-all">
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-white">{icon}</div>
-        <span className="text-white/40 font-mono text-[10px]">LIVE</span>
+    <div className="relative border border-white/10 bg-black/40 backdrop-blur-xl p-6 hover:border-white/30 transition-all shadow-2xl">
+      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-white">{icon}</div>
+          <span className="text-white/40 font-mono text-[10px]">LIVE</span>
+        </div>
+        <p className="text-white/60 font-mono text-[10px] tracking-wider mb-1">{label}</p>
+        <p className="text-3xl font-bold text-white font-mono">{value}</p>
       </div>
-      <p className="text-white/60 font-mono text-[10px] tracking-wider mb-1">{label}</p>
-      <p className="text-3xl font-bold text-white font-mono">{value}</p>
     </div>
   )
 }

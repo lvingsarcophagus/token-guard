@@ -100,7 +100,7 @@ export default function PrivacySettingsPage() {
           {/* GDPR Rights Section */}
           <div className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 p-6 mb-6">
             <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2 font-mono">
-              <Shield className="w-5 h-5 text-cyan-400" />
+              <Shield className="w-5 h-5 text-white/70" />
               YOUR GDPR RIGHTS
             </h2>
             <p className="text-gray-300 text-sm mb-6 font-mono">
@@ -109,10 +109,10 @@ export default function PrivacySettingsPage() {
             
             <div className="space-y-4">
               {/* Right to Access & Portability */}
-              <div className="flex items-start justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:border-cyan-500/50 transition">
+              <div className="flex items-start justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:border-white/30 transition">
                 <div className="flex-1">
                   <h3 className="font-semibold text-white mb-1 flex items-center gap-2 font-mono">
-                    <Download className="w-4 h-4 text-cyan-400" />
+                    <Download className="w-4 h-4 text-white/70" />
                     DOWNLOAD MY DATA
                   </h3>
                   <p className="text-sm text-gray-400 font-mono">
@@ -125,14 +125,14 @@ export default function PrivacySettingsPage() {
                 <button
                   onClick={handleExportData}
                   disabled={loading}
-                  className="ml-4 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-600 text-white rounded-lg font-medium transition font-mono text-sm"
+                  className="ml-4 px-4 py-2 bg-white/10 hover:bg-white/20 disabled:bg-gray-600 text-white rounded-lg font-medium transition font-mono text-sm border border-white/30"
                 >
                   {loading ? 'EXPORTING...' : 'EXPORT'}
                 </button>
               </div>
               
               {/* Right to Erasure */}
-              <div className="flex items-start justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:border-red-500/50 transition">
+              <div className="flex items-start justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:border-white/30 transition">
                 <div className="flex-1">
                   <h3 className="font-semibold text-white mb-1 flex items-center gap-2 font-mono">
                     <Trash2 className="w-4 h-4 text-red-400" />

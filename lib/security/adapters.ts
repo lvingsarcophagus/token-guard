@@ -194,8 +194,11 @@ export async function checkSolanaSecurity(
     
     const info = token.onChainAccountInfo?.accountInfo?.data?.parsed?.info;
     
+    console.log(`[Solana Security] Freeze Authority: "${info?.freezeAuthority}", Mint Authority: "${info?.mintAuthority}"`)
+    
     // CHECK 1: Freeze Authority (MOST CRITICAL ON SOLANA)
-    if (info?.freezeAuthority && info.freezeAuthority !== null) {
+    // Empty string means revoked, non-empty string means exists
+    if (info?.freezeAuthority && info.freezeAuthority !== null && info.freezeAuthority !== '') {
       checks.push({
         name: 'Freeze Authority',
         severity: 'CRITICAL',
@@ -206,7 +209,8 @@ export async function checkSolanaSecurity(
     }
     
     // CHECK 2: Mint Authority (Context-dependent)
-    if (info?.mintAuthority && info.mintAuthority !== null) {
+    // Empty string means revoked, non-empty string means exists
+    if (info?.mintAuthority && info.mintAuthority !== null && info.mintAuthority !== '') {
       const tokenAge = token.deployedDaysAgo || 0;
       
       if (tokenAge < 90) {

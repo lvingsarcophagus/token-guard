@@ -1,5 +1,5 @@
 import { TokenData, RiskResult, RiskBreakdown } from './types/token-data'
-import { detectMemeTokenWithAI, generateAIExplanation } from './ai/gemini'
+import { detectMemeTokenWithAI, generateAIExplanation, generateComprehensiveAISummary } from './ai/groq'
 import { getTwitterAdoptionData, calculateAdoptionRisk } from './twitter/adoption'
 import { getWeights, ChainType } from './risk-factors/weights'
 
@@ -35,6 +35,40 @@ export async function calculateRisk(
   const hasGoPlus = data.is_honeypot !== undefined
 
   console.log(`\n🔬 [Tokenomics Lab] Starting calculation - Plan: ${plan}, GoPlus: ${hasGoPlus ? 'ACTIVE' : 'FALLBACK'}`)
+  
+  // ═══════════════════════════════════════════════════════════
+  // STEP 0: STABLECOIN OVERRIDE (before any calculations)
+  // ═══════════════════════════════════════════════════════════
+  
+  const isStablecoin = checkIfStablecoin(metadata?.tokenSymbol, data.marketCap)
+  if (isStablecoin) {
+    console.log(`💵 [Stablecoin Override] Detected major stablecoin (${metadata?.tokenSymbol}) → Risk score: 10 (LOW)`)
+    return {
+      overall_risk_score: 10,
+      risk_level: 'LOW' as const,
+      confidence_score: 99,
+      data_sources: ['Known Stablecoin'],
+      goplus_status: 'active' as const,
+      plan,
+      breakdown: {
+        supplyDilution: 5,
+        holderConcentration: 10,
+        liquidityDepth: 5,
+        vestingUnlock: 0,
+        contractControl: 0,
+        taxFee: 0,
+        distribution: 5,
+        burnDeflation: 5,
+        adoption: 0,
+        auditTransparency: 0
+      },
+      detailed_insights: [
+        `✅ Recognized as major stablecoin (${metadata?.tokenSymbol || 'STABLECOIN'})`,
+        '✅ Battle-tested and widely trusted in the crypto ecosystem',
+        '✅ Low volatility risk due to USD peg mechanism'
+      ]
+    }
+  }
   
   // ═══════════════════════════════════════════════════════════
   // STEP 1: AI MEME DETECTION → SELECT WEIGHT PROFILE
@@ -143,12 +177,14 @@ export async function calculateRisk(
       scores.auditTransparency * weights.audit
     
     console.log(`⚖️ [New Weights] Using ${memeDetection.isMeme ? 'MEME' : 'STANDARD'} + ${chain} profile`)
+    console.log(`📊 [Calculated Risk] Raw score before baseline: ${overallScoreRaw.toFixed(2)}`)
     
-    // MEME BASELINE: Meme tokens start at 50-60 baseline
+    // MEME BASELINE: Add baseline risk to meme tokens (not just minimum)
     if (memeDetection.isMeme) {
-      const memeBaseline = 55
-      overallScoreRaw = Math.max(overallScoreRaw, memeBaseline)
-      console.log(`✓ Meme Baseline Applied: min ${memeBaseline}`)
+      const memeBaselineBonus = 15 // Add 15 points to meme tokens
+      const beforeBaseline = overallScoreRaw
+      overallScoreRaw = Math.min(overallScoreRaw + memeBaselineBonus, 100) // Cap at 100
+      console.log(`✓ Meme Baseline Applied: ${beforeBaseline.toFixed(2)} + ${memeBaselineBonus} = ${overallScoreRaw.toFixed(2)}`)
     }
   } else {
     // Use legacy 10-factor weighted system
@@ -160,18 +196,41 @@ export async function calculateRisk(
 
   console.log(`[Risk Calc] Overall Score (raw): ${overallScoreRaw.toFixed(2)}`)
 
-  const riskLevel = classifyRisk(overallScoreRaw)
+  // ═══════════════════════════════════════════════════════════
+  // ✅ CRITICAL OVERRIDE: Apply critical flags penalty
+  // ═══════════════════════════════════════════════════════════
+  const criticalFlags = extractCriticalFlags(data, hasGoPlus)
+  const criticalCount = criticalFlags.length
+  
+  let overallScoreFinal = overallScoreRaw
+  if (criticalCount >= 3) {
+    console.log(`🚨 [Critical Override] ${criticalCount} CRITICAL flags detected → Min score 75`)
+    overallScoreFinal = Math.max(overallScoreRaw, 75)
+  } else if (criticalCount >= 1) {
+    console.log(`⚠️ [Critical Override] ${criticalCount} CRITICAL flag(s) detected → +15 penalty`)
+    overallScoreFinal = Math.min(overallScoreRaw + 15, 100)
+  }
+
+  const riskLevel = classifyRisk(overallScoreFinal)
   const confidenceScore = hasGoPlus
     ? (plan === 'PREMIUM' ? 96 : 85)
     : (plan === 'PREMIUM' ? 78 : 70)
 
-  const overallRounded = Math.round(overallScoreRaw)
+  const overallRounded = Math.round(overallScoreFinal)
+  
+  // Build dynamic data sources array based on what we actually have
+  const dataSources: string[] = []
+  if (data.marketCap > 0) dataSources.push('Mobula')
+  if (data.txCount24h > 0 && !(data as any).txCount24h_is_estimated) dataSources.push('Moralis')
+  if (hasGoPlus) dataSources.push('GoPlus Security')
+  if (data.chain === 'SOLANA' && data.holderCount > 0) dataSources.push('Helius')
+  if (dataSources.length === 0) dataSources.push('Mobula (GoPlus fallback active)')
 
   const baseResult = {
     overall_risk_score: overallRounded,
     risk_level: riskLevel,
     confidence_score: confidenceScore,
-    data_sources: hasGoPlus ? ['Mobula', 'GoPlus Security'] : ['Mobula (GoPlus fallback active)'],
+    data_sources: dataSources,
     goplus_status: hasGoPlus ? 'active' as const : 'fallback' as const,
     plan
   }
@@ -216,7 +275,7 @@ export async function calculateRisk(
     if (memeDetection.isMeme) {
       result.detailed_insights = [
         `${classificationPrefix}: MEME TOKEN (${memeDetection.confidence}% confident) - ${memeDetection.reasoning}`,
-        `⚠️ Meme Baseline Applied: Minimum risk score set to 55 due to speculative nature`,
+        `⚠️ Meme Baseline Applied: +15 risk points added due to high volatility and speculative nature`,
         ...(result.detailed_insights || [])
       ]
     } else {
@@ -240,6 +299,76 @@ export async function calculateRisk(
         `🐦 Twitter Metrics: Adoption risk score ${twitterAdoptionScore}/100 based on social presence`
       )
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // STEP 5: GENERATE COMPREHENSIVE AI ANALYSIS (A + B + C)
+    // ═══════════════════════════════════════════════════════════
+    
+    try {
+      console.log(`🤖 [AI Analysis] Generating comprehensive summary...`)
+      console.log(`🤖 [AI Analysis] GROQ_API_KEY exists:`, !!process.env.GROQ_API_KEY)
+      console.log(`🤖 [AI Analysis] User plan:`, plan)
+      
+      const factors = Object.entries(scores).map(([name, value]) => ({
+        name,
+        value: typeof value === 'number' ? value : 0,
+        description: undefined
+      }))
+      
+      console.log(`🤖 [AI Analysis] Prepared ${factors.length} factors for AI`)
+      
+      const aiSummary = await generateComprehensiveAISummary({
+        name: metadata?.tokenName || 'Token',
+        symbol: metadata?.tokenSymbol || 'Unknown',
+        chain: metadata?.chain || 'EVM',
+        riskScore: overallScoreRaw,
+        riskLevel: result.risk_level,
+        price: (data as any).priceUSD,
+        marketCap: data.marketCap,
+        holders: data.holderCount,
+        liquidity: data.liquidityUSD,
+        age: (data as any).age || 'Unknown',
+        factors,
+        redFlags: result.critical_flags || [],
+        greenFlags: []
+      })
+      
+      const factorExplanations: Record<string, string> = {}
+      factors.forEach(f => {
+        factorExplanations[f.name] = f.description || aiSummary.riskAnalysis
+      })
+      
+      console.log(`🤖 [AI Analysis] Raw AI response:`, JSON.stringify(aiSummary, null, 2))
+      
+      result.ai_summary = {
+        executive_summary: aiSummary.overview,
+        recommendation: overallScoreRaw > 70 ? 'AVOID' : overallScoreRaw > 40 ? 'RESEARCH_MORE' : 'BUY',
+        classification: {
+          type: memeDetection.isMeme ? 'MEME_TOKEN' : 'UTILITY_TOKEN',
+          confidence: memeDetection.confidence
+        },
+        factor_explanations: factorExplanations,
+        top_risk_factors: factors.slice(0, 3).map(f => ({ 
+          name: f.name, 
+          score: f.value, 
+          explanation: aiSummary.riskAnalysis,
+          impact: 'HIGH'
+        })),
+        key_insights: aiSummary.keyInsights,
+        generated_at: new Date().toISOString()
+      }
+      
+      console.log(`✓ AI Analysis complete - Summary generated successfully`)
+      console.log(`✓ AI Summary structure:`, Object.keys(result.ai_summary))
+    } catch (error) {
+      console.error(`❌ [AI Analysis] FAILED to generate summary:`, error)
+      console.error(`❌ [AI Analysis] Error details:`, {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        type: typeof error
+      })
+      // Continue without AI summary - not critical
+    }
     
     console.log(`✓ Enhanced insights added`)
   }
@@ -252,47 +381,50 @@ export async function calculateRisk(
 function classifyRisk(score: number): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
   if (score >= 75) return 'CRITICAL'
   if (score >= 50) return 'HIGH'
-  if (score >= 30) return 'MEDIUM'
+  if (score >= 35) return 'MEDIUM'  // Adjusted from 30 to reduce false positives
+  if (score >= 20) return 'LOW'      // Added explicit LOW threshold
   return 'LOW'
 }
 
 // FACTOR 1: Supply Dilution (Pure Mobula - no fallback needed)
 function calcSupplyDilution(data: TokenData): number {
-  let score = 0
+  // ✅ FIXED: Use FDV/MCAP ratio as primary metric (Mobula-sourced)
+  // RULE: Never use data if validation fails → default to HIGH RISK
   
-  // FDV vs Market Cap ratio (unlocked vs locked tokens)
-  if (data.fdv > 0 && data.marketCap > 0) {
-    const mcFdvRatio = data.marketCap / data.fdv
-    if (mcFdvRatio < 0.02) score += 38 // Less than 2% circulating = extreme dilution risk
-    else if (mcFdvRatio < 0.05) score += 32
-    else if (mcFdvRatio < 0.10) score += 27
-    else if (mcFdvRatio < 0.15) score += 22
-    else if (mcFdvRatio < 0.25) score += 17
-    else if (mcFdvRatio < 0.35) score += 12
-    else if (mcFdvRatio < 0.50) score += 7
-  } else {
-    score += 15 // No FDV data = some uncertainty
+  if (!data.fdv || data.fdv <= 0 || !data.marketCap || data.marketCap <= 0) {
+    // No valid FDV/MCAP data = HIGH RISK
+    console.log(`[Supply Dilution] ⚠️ VALIDATION FAILED: FDV=${data.fdv}, MCAP=${data.marketCap} → score 100`)
+    return 100
   }
 
-  // Circulating supply ratio
-  if (data.totalSupply > 0) {
-    const circRatio = data.circulatingSupply / data.totalSupply
-    if (circRatio < 0.05) score += 32
-    else if (circRatio < 0.10) score += 26
-    else if (circRatio < 0.20) score += 21
-    else if (circRatio < 0.30) score += 16
-    else if (circRatio < 0.40) score += 11
-    else if (circRatio < 0.50) score += 6
+  const fdvToMcap = data.fdv / data.marketCap
+  
+  // Base score from FDV/MCAP ratio
+  let score = 0
+  if (fdvToMcap <= 1) score = 10        // ≤1x → 10
+  else if (fdvToMcap <= 2) score = 30   // ≤2x → 30
+  else if (fdvToMcap <= 5) score = 50   // ≤5x → 50
+  else if (fdvToMcap <= 10) score = 70  // ≤10x → 70
+  else score = 90                         // >10x → 90
+
+  console.log(`[Supply Dilution] FDV=$${(data.fdv/1e6).toFixed(2)}M / MCAP=$${(data.marketCap/1e6).toFixed(2)}M = ${fdvToMcap.toFixed(2)}x → base score ${score}`)
+
+  // ✅ CRITICAL FIX: Add +20 if mintable (NEW RULE)
+  if (data.is_mintable) {
+    console.log(`[Supply Dilution] 🚨 MINTABLE detected → +20 penalty`)
+    score += 20
   }
 
-  // Unlimited supply with no burns
-  if (!data.maxSupply && data.burnedSupply === 0) score += 22
-  else if (!data.maxSupply && data.burnedSupply > 0) score += 10 // Some burns help
+  // ✅ Additional: Unlimited supply with no burns
+  if (!data.maxSupply && data.burnedSupply === 0) {
+    console.log(`[Supply Dilution] Unlimited supply, no burns → +15 penalty`)
+    score += 15
+  }
 
   return Math.min(score, 100)
 }
 
-// FACTOR 2: Holder Concentration (Pure Mobula)
+// FACTOR 2: Holder Concentration (Pure Mobula + NEW: top50/top100 + unique buyers)
 function calcHolderConcentration(data: TokenData): number {
   let score = 0
   
@@ -301,7 +433,7 @@ function calcHolderConcentration(data: TokenData): number {
     return 50 // Unknown - moderate risk
   }
   
-  // Top 10 holders concentration
+  // Top 10 holders concentration (existing)
   if (data.top10HoldersPct > 0.8) score += 50
   else if (data.top10HoldersPct > 0.7) score += 40
   else if (data.top10HoldersPct > 0.6) score += 35
@@ -310,7 +442,24 @@ function calcHolderConcentration(data: TokenData): number {
   else if (data.top10HoldersPct > 0.3) score += 12
   else if (data.top10HoldersPct > 0.2) score += 5
 
-  // Holder count risk
+  // NEW: Top 50 holders concentration (wash trading detection)
+  if (data.top50HoldersPct !== undefined) {
+    console.log(`[Holder Concentration] Top 50 holders: ${(data.top50HoldersPct * 100).toFixed(1)}%`)
+    if (data.top50HoldersPct > 0.95) score += 45 // 95%+ in top 50 = extreme concentration
+    else if (data.top50HoldersPct > 0.90) score += 35
+    else if (data.top50HoldersPct > 0.85) score += 25
+    else if (data.top50HoldersPct > 0.80) score += 15
+  }
+
+  // NEW: Top 100 holders concentration (bundle detection)
+  if (data.top100HoldersPct !== undefined) {
+    console.log(`[Holder Concentration] Top 100 holders: ${(data.top100HoldersPct * 100).toFixed(1)}%`)
+    if (data.top100HoldersPct > 0.98) score += 40 // 98%+ in top 100 = suspicious bundles
+    else if (data.top100HoldersPct > 0.95) score += 30
+    else if (data.top100HoldersPct > 0.90) score += 20
+  }
+
+  // Holder count risk (existing)
   if (data.holderCount === 0) score += 40 // No data
   else if (data.holderCount < 50) score += 35
   else if (data.holderCount < 100) score += 30
@@ -319,28 +468,40 @@ function calcHolderConcentration(data: TokenData): number {
   else if (data.holderCount < 1000) score += 10
   else if (data.holderCount < 5000) score += 5
 
+  // NEW: Unique buyers penalty (wash trading detection)
+  if (data.uniqueBuyers24h !== undefined) {
+    console.log(`[Holder Concentration] Unique buyers 24h: ${data.uniqueBuyers24h}`)
+    if (data.uniqueBuyers24h < 10) score += 50 // Extremely low = likely wash trading
+    else if (data.uniqueBuyers24h < 25) score += 40
+    else if (data.uniqueBuyers24h < 50) score += 30
+    else if (data.uniqueBuyers24h < 100) score += 20
+    else if (data.uniqueBuyers24h < 200) score += 10
+    // >200 unique buyers = normal
+  }
+
   return Math.min(score, 100)
 }
 
-// FACTOR 3: Liquidity Depth (Mobula + GoPlus bonus)
+// FACTOR 3: Liquidity Depth (Mobula + GoPlus bonus + NEW: liquidity drops)
 function calcLiquidityDepth(data: TokenData, hasGoPlus: boolean): number {
+  // ✅ FIXED: Add zero-liquidity guard (prevent 90% rug pulls)
+  
+  // VALIDATION: Never use data if liquidity < $10K
+  if (!data.liquidityUSD || data.liquidityUSD < 10000) {
+    console.warn(`[Liquidity] 🚨 ZERO-LIQUIDITY GUARD: $${data.liquidityUSD || 0} < $10K → Possible rug pull!`)
+    return 100 // CRITICAL: Extremely low liquidity = max risk
+  }
+
   let score = 0
   
-  // CRITICAL FIX: If no liquidity data, default to HIGH RISK (not 0)
-  if (!data.liquidityUSD || data.liquidityUSD === 0) {
-    console.warn('[Liquidity] Missing liquidity data - defaulting to HIGH RISK (85)')
-    return 85 // ⚠️ No liquidity data = very high risk
-  }
-  
   // Absolute liquidity amount
-  if (data.liquidityUSD < 1000) score += 50
-  else if (data.liquidityUSD < 5000) score += 42
-  else if (data.liquidityUSD < 10000) score += 36
-  else if (data.liquidityUSD < 25000) score += 28
-  else if (data.liquidityUSD < 50000) score += 22
-  else if (data.liquidityUSD < 100000) score += 15
-  else if (data.liquidityUSD < 250000) score += 8
-  else if (data.liquidityUSD < 500000) score += 3
+  if (data.liquidityUSD < 25000) score += 42
+  else if (data.liquidityUSD < 50000) score += 32
+  else if (data.liquidityUSD < 100000) score += 25
+  else if (data.liquidityUSD < 250000) score += 18
+  else if (data.liquidityUSD < 500000) score += 10
+  else if (data.liquidityUSD < 1_000_000) score += 5
+  // >$1M = 0 extra penalty
 
   // Market cap to liquidity ratio (if market cap available)
   if (data.marketCap > 0 && data.liquidityUSD > 0) {
@@ -355,9 +516,34 @@ function calcLiquidityDepth(data: TokenData, hasGoPlus: boolean): number {
     else if (mcLiqRatio > 20) score += 8
   }
 
-  // GoPlus LP lock bonus/penalty
-  if (hasGoPlus && !data.lp_locked) score += 20
-  if (hasGoPlus && data.lp_locked) score -= 5 // Reduce risk if locked
+  // NEW: Liquidity drop detection (rug pull indicator)
+  if (data.liquidity1hAgo && data.liquidity1hAgo > 0) {
+    const liquidityDrop1h = (data.liquidity1hAgo - data.liquidityUSD) / data.liquidity1hAgo
+    console.log(`[Liquidity] 1h drop: ${(liquidityDrop1h * 100).toFixed(1)}% (${data.liquidity1hAgo} → ${data.liquidityUSD})`)
+    if (liquidityDrop1h > 0.8) score += 60 // 80%+ drop in 1 hour = CRITICAL
+    else if (liquidityDrop1h > 0.6) score += 45
+    else if (liquidityDrop1h > 0.4) score += 30
+    else if (liquidityDrop1h > 0.2) score += 15
+  }
+
+  if (data.liquidity24hAgo && data.liquidity24hAgo > 0) {
+    const liquidityDrop24h = (data.liquidity24hAgo - data.liquidityUSD) / data.liquidity24hAgo
+    console.log(`[Liquidity] 24h drop: ${(liquidityDrop24h * 100).toFixed(1)}% (${data.liquidity24hAgo} → ${data.liquidityUSD})`)
+    if (liquidityDrop24h > 0.9) score += 50 // 90%+ drop in 24 hours = CRITICAL
+    else if (liquidityDrop24h > 0.7) score += 35
+    else if (liquidityDrop24h > 0.5) score += 20
+  }
+
+  // ✅ LP Lock check (prevents rug)
+  if (hasGoPlus) {
+    if (!data.lp_locked && data.lp_in_owner_wallet) {
+      console.log(`[Liquidity] ⚠️ LP NOT LOCKED/BURNED → +30 penalty`)
+      score += 30
+    } else if (data.lp_locked) {
+      console.log(`[Liquidity] ✓ LP locked → -10 bonus`)
+      score = Math.max(0, score - 10)
+    }
+  }
 
   const finalScore = Math.min(score, 100)
   console.log(`[Liquidity] Final score: ${finalScore}`)
@@ -388,47 +574,79 @@ function calcVestingUnlock(data: TokenData): number {
 
 // FACTOR 5: Contract Control (GoPlus PRIMARY, fallback to proxies)
 function calcContractControl(data: TokenData, hasGoPlus: boolean): number {
-  if (hasGoPlus) {
-    let score = 0
-    
-    // Critical: Honeypot = instant max risk
-    if (data.is_honeypot) return 100
-    
-    console.log(`[Contract Control] is_mintable=${data.is_mintable}, owner_renounced=${data.owner_renounced}, marketCap=$${(data.marketCap / 1e9).toFixed(1)}B`)
-    
-    // OVERRIDE: Large cap tokens (>$50B) are considered safe even if upgradeable
-    // Examples: USDT, USDC, ETH - proxy contracts but battle-tested
-    if (data.marketCap > 50_000_000_000) {
-      console.log(`[Contract Control] Large cap override: $${(data.marketCap / 1e9).toFixed(1)}B > $50B = 0`)
-      return 0
-    }
-    
-    // SAFE: Renounced ownership + non-mintable = very safe (e.g., PEPE)
-    if (data.owner_renounced && !data.is_mintable) {
-      console.log(`[Contract Control] Safe token: Renounced + Non-mintable = 0`)
-      return 0  // No control risk
-    }
-    
-    // RISKY: Mintable with active owner
-    if (data.is_mintable && !data.owner_renounced) {
-      console.log(`[Contract Control] High risk: Mintable + Active owner = +60`)
-      score += 60
-    }
-    
-    // MODERATE: Active owner but not mintable  
-    if (!data.owner_renounced && !data.is_mintable) {
-      console.log(`[Contract Control] Moderate risk: Active owner but not mintable = +30`)
-      score += 30
-    }
-    
-    console.log(`[Contract Control] Final score: ${score}`)
-    return Math.min(score, 100)
+  // ✅ FIXED: Chain-specific logic + LP lock check + critical overrides
+  let score = 0
+  
+  // ═════════════════════════════════════════════════════════════
+  // CRITICAL FLAGS (ANY ONE OF THESE = +penalty)
+  // ═════════════════════════════════════════════════════════════
+  
+  // Honeypot detection (EVM via GoPlus)
+  if (hasGoPlus && data.is_honeypot) {
+    console.log(`[Contract Control] 🚨 HONEYPOT DETECTED → +60 penalty`)
+    score += 60
   }
-  // FALLBACK: Use Mobula proxies
-  let score = 20 // Base uncertainty penalty
-  if (data.top10HoldersPct > 0.8) score += 35
-  if (data.holderCount < 100) score += 25
-  if (data.ageDays < 7) score += 20
+  
+  // Mintable flag (can print unlimited tokens)
+  if (data.is_mintable) {
+    console.log(`[Contract Control] 🚨 MINTABLE CONTRACT → +50 penalty`)
+    score += 50
+  }
+  
+  // ═════════════════════════════════════════════════════════════
+  // SOLANA-SPECIFIC: Freeze Authority (40%+ weight for Solana)
+  // ═════════════════════════════════════════════════════════════
+  if (data.chain === 'SOLANA' || data.chain?.toUpperCase() === 'SOLANA') {
+    if (data.freeze_authority_exists) {
+      console.log(`[Contract Control] ☀️ SOLANA: Freeze authority exists → +100 penalty`)
+      score += 100  // CRITICAL on Solana - can lock user wallets
+    } else if (data.freeze_authority_exists === undefined || data.freeze_authority_exists === null) {
+      // We don't have freeze authority data - apply conservative default for Solana
+      // Most SPL tokens have freeze authority, assume 50% probability
+      console.log(`[Contract Control] ☀️ SOLANA: Freeze authority status unknown → +35 penalty (conservative default)`)
+      score += 35  // Conservative penalty for missing data
+    }
+    // else: freeze_authority_exists === false, no additional penalty needed
+  }
+  
+  // ═════════════════════════════════════════════════════════════
+  // LP LOCK CHECK: Prevent 90% rug pulls
+  // ═════════════════════════════════════════════════════════════
+  if (hasGoPlus && data.lp_in_owner_wallet) {
+    console.log(`[Contract Control] ⚠️ LP NOT LOCKED/BURNED → +40 penalty (rug risk)`)
+    score += 40
+  }
+  
+  // ═════════════════════════════════════════════════════════════
+  // OWNER CONTROL (If not already penalized above)
+  // ═════════════════════════════════════════════════════════════
+  if (!data.owner_renounced && score === 0) {
+    console.log(`[Contract Control] Owner not renounced → +20 penalty`)
+    score += 20
+  }
+  
+  // ═════════════════════════════════════════════════════════════
+  // SAFE TOKENS (Return early if no flags)
+  // ═════════════════════════════════════════════════════════════
+  if (score === 0 && data.owner_renounced) {
+    console.log(`[Contract Control] ✓ Safe: Ownership renounced → score 0`)
+    return 0
+  }
+  
+  // ═════════════════════════════════════════════════════════════
+  // FALLBACK (No GoPlus data)
+  // ═════════════════════════════════════════════════════════════
+  if (!hasGoPlus) {
+    console.log(`[Contract Control] Using Mobula fallback (no GoPlus data)`)
+    // Base uncertainty penalty
+    let fallbackScore = 20
+    if (data.top10HoldersPct > 0.8) fallbackScore += 35
+    if (data.holderCount < 100) fallbackScore += 25
+    if (data.ageDays < 7) fallbackScore += 20
+    return Math.min(fallbackScore, 100)
+  }
+
+  console.log(`[Contract Control] Final score: ${score}`)
   return Math.min(score, 100)
 }
 
@@ -515,11 +733,14 @@ function calcBurnDeflation(data: TokenData): number {
 function calcAdoption(data: TokenData): number {
   let score = 0
   
+  // Age-based adjustment: New tokens shouldn't be penalized as much for low tx
+  const ageMultiplier = data.ageDays < 7 ? 0.7 : 1.0  // New tokens get 30% reduced penalty
+  
   // Transaction volume (24h)
-  if (data.txCount24h === 0) score += 45 // No transactions = high risk
-  else if (data.txCount24h < 5) score += 38
-  else if (data.txCount24h < 10) score += 32
-  else if (data.txCount24h < 25) score += 26
+  if (data.txCount24h === 0) score += Math.round(45 * ageMultiplier)  // Reduced for new tokens
+  else if (data.txCount24h < 5) score += Math.round(38 * ageMultiplier)
+  else if (data.txCount24h < 10) score += Math.round(32 * ageMultiplier)
+  else if (data.txCount24h < 25) score += Math.round(26 * ageMultiplier)
   else if (data.txCount24h < 50) score += 20
   else if (data.txCount24h < 100) score += 14
   else if (data.txCount24h < 250) score += 8
@@ -528,21 +749,21 @@ function calcAdoption(data: TokenData): number {
   // Volume to market cap ratio
   if (data.marketCap > 0 && data.volume24h >= 0) {
     const volMcRatio = data.volume24h / data.marketCap
-    if (volMcRatio < 0.0001) score += 32 // Dead token
-    else if (volMcRatio < 0.001) score += 26
+    if (volMcRatio < 0.0001) score += Math.round(32 * ageMultiplier)  // Dead token penalty reduced for new
+    else if (volMcRatio < 0.001) score += Math.round(26 * ageMultiplier)
     else if (volMcRatio < 0.005) score += 20
     else if (volMcRatio < 0.01) score += 14
-    else if (volMcRatio > 5) score += 25 // Excessive volatility
+    else if (volMcRatio > 5) score += 25  // Excessive volatility - always penalize
     else if (volMcRatio > 3) score += 18
     else if (volMcRatio > 2) score += 12
   }
 
-  // Age factor
-  if (data.ageDays < 1) score += 22
-  else if (data.ageDays < 3) score += 16
-  else if (data.ageDays < 7) score += 12
-  else if (data.ageDays < 14) score += 8
-  else if (data.ageDays < 30) score += 4
+  // Age factor - much lighter penalty
+  if (data.ageDays < 1) score += 8  // Reduced from 22
+  else if (data.ageDays < 3) score += 6  // Reduced from 16
+  else if (data.ageDays < 7) score += 4  // Reduced from 12
+  else if (data.ageDays < 14) score += 2  // Reduced from 8
+  else if (data.ageDays < 30) score += 1  // Reduced from 4
   
   return Math.min(score, 100)
 }
@@ -571,6 +792,14 @@ function extractCriticalFlags(data: TokenData, hasGoPlus: boolean): string[] {
     if ((data.sell_tax || 0) > 0.2) flags.push(`⚠️ High sell tax: ${(((data.sell_tax || 0) * 100)).toFixed(0)}%`)
     if (!data.lp_locked) flags.push('⚠️ Liquidity not locked')
   }
+  
+  // SOLANA FREEZE AUTHORITY - ALWAYS CRITICAL
+  if (data.chain === 'SOLANA' || data.chain?.toUpperCase() === 'SOLANA') {
+    if (data.freeze_authority_exists) {
+      flags.push('🚨 FREEZE AUTHORITY - Creator can lock wallets')
+    }
+  }
+  
   if (data.nextUnlock30dPct && data.nextUnlock30dPct > 0.15) {
     flags.push(`📅 ${(data.nextUnlock30dPct * 100).toFixed(1)}% unlocking in 30 days`)
   }
@@ -578,6 +807,24 @@ function extractCriticalFlags(data: TokenData, hasGoPlus: boolean): string[] {
     flags.push(`👥 ${(data.top10HoldersPct * 100).toFixed(0)}% held by top 10 wallets`)
   }
   return flags
+}
+
+/**
+ * Check if token is a major stablecoin
+ * These tokens get special LOW risk scores regardless of calculated metrics
+ * Requires: symbol match + high market cap to avoid false positives
+ */
+function checkIfStablecoin(tokenSymbol: string | undefined, marketCap: number): boolean {
+  if (!tokenSymbol) return false
+  
+  const STABLECOIN_SYMBOLS = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDP', 'FRAX', 'USDD']
+  
+  // Symbol must match AND market cap > $100M (to avoid fake stablecoins)
+  if (STABLECOIN_SYMBOLS.includes(tokenSymbol.toUpperCase()) && marketCap > 100_000_000) {
+    return true
+  }
+  
+  return false
 }
 
 function calculateUpcomingRisks(data: TokenData) {
