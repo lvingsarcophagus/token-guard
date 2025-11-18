@@ -165,9 +165,14 @@ function calculateContractSecurity(data: TokenData): {
       }
     }
     
+    // Only flag if we have explicit data that liquidity is NOT locked
+    // Don't flag if data is unavailable (undefined/null)
     if (data.liquidityLocked === false) {
       score += 25;
       flags.push('⚠️ Liquidity not locked');
+    } else if (data.liquidityLocked === true) {
+      // Bonus for locked liquidity
+      score = Math.max(0, score - 10);
     }
     
     if (data.deployerTxLast7Days && data.deployerTxLast7Days > 5) {

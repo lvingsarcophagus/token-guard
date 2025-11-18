@@ -790,7 +790,8 @@ function extractCriticalFlags(data: TokenData, hasGoPlus: boolean): string[] {
     if (data.is_mintable && !data.owner_renounced) flags.push('⚠️ Owner can mint unlimited tokens')
     if (data.tax_modifiable) flags.push('⚠️ Taxes can be changed anytime')
     if ((data.sell_tax || 0) > 0.2) flags.push(`⚠️ High sell tax: ${(((data.sell_tax || 0) * 100)).toFixed(0)}%`)
-    if (!data.lp_locked) flags.push('⚠️ Liquidity not locked')
+    // Only flag if we have explicit data that LP is NOT locked (not just undefined)
+    if (data.lp_locked === false) flags.push('⚠️ Liquidity not locked')
   }
   
   // SOLANA FREEZE AUTHORITY - ALWAYS CRITICAL
