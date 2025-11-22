@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-export default function PremiumDashboardRedirect() {
+export default function FreeDashboardRedirect() {
   const router = useRouter()
   
   useEffect(() => {

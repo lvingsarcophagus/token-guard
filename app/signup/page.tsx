@@ -145,7 +145,11 @@ export default function SignUpPage() {
     setError("")
 
     try {
+      // Request additional user info scopes
       const provider = new GoogleAuthProvider()
+      provider.addScope('profile')
+      provider.addScope('email')
+      
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
@@ -153,15 +157,22 @@ export default function SignUpPage() {
       const userDoc = await getDoc(doc(db, "users", user.uid))
       
       if (!userDoc.exists()) {
-        // Create user profile in Firestore for new Google users
+        // Extract user info from Google profile
+        const displayName = user.displayName || ""
+        const photoURL = user.photoURL || null
+        const email = user.email || ""
+        
+        // Create user profile in Firestore for new Google users with collected info
         await setDoc(doc(db, "users", user.uid), {
           uid: user.uid,
-          email: user.email,
-          name: user.displayName || "",
+          email: email,
+          name: displayName,
+          photoURL: photoURL,
           company: null,
           country: null,
           tier: "FREE",
           plan: "FREE",
+          role: "user",
           usage: {
             tokensAnalyzed: 0,
             lastResetDate: new Date(),
@@ -179,7 +190,8 @@ export default function SignUpPage() {
           metadata: {
             signupSource: "google",
             userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
-            signupIp: null
+            signupIp: null,
+            provider: "google"
           },
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
@@ -189,12 +201,17 @@ export default function SignUpPage() {
         // Track signup event
         analyticsEvents.signup('google')
       } else {
+        // Update last login time
+        await setDoc(doc(db, "users", user.uid), {
+          lastLoginAt: new Date().toISOString()
+        }, { merge: true })
+        
         // Track login event for existing users
         analyticsEvents.login('google')
       }
       
-      // Redirect to free dashboard
-      router.push("/free-dashboard")
+      // Redirect to unified dashboard
+      router.push("/dashboard")
     } catch (error: unknown) {
       console.error("Google sign up failed:", error)
       const err = error as { code?: string; message?: string }

@@ -114,7 +114,7 @@ export default function ScanPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/Tokenomicslab.ico" alt="Tokenomics Lab" className="w-8 h-8 object-contain" />
+              <img src="/tokenomics-lab-logo.ico" alt="Tokenomics Lab" className="w-8 h-8 object-contain" />
               <span className="text-white font-mono font-bold tracking-wider text-lg">
                 TOKENOMICS LAB
               </span>

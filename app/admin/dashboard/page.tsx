@@ -530,7 +530,7 @@ export default function EnhancedAdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img 
-              src="/Tokenomicslab.ico" 
+              src="/tokenomics-lab-logo.ico" 
               alt="Tokenomics Lab" 
               className="w-10 h-10 object-contain transition-all duration-300 hover:scale-110 hover:brightness-110" 
             />

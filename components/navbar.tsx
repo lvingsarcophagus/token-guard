@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Shield, Home, Search, TrendingUp, LogOut, User, Bell } from "lucide-react"
+import { Shield, Home, Search, TrendingUp, LogOut, User, Bell, Activity } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { signOut } from "firebase/auth"
 import { auth } from "@/lib/firebase"
@@ -62,17 +62,12 @@ export default function Navbar() {
 
   // Build navigation links
   const navLinks = []
-  const isPremiumDashboard = pathname === "/premium/dashboard"
-  const isFreeDashboard = pathname === "/free-dashboard"
-  const isDashboard = isPremiumDashboard || isFreeDashboard
+  const isDashboard = pathname === "/dashboard"
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   
   if (user) {
-    // Dashboard home link
-    if (userData?.tier === "pro") {
-      navLinks.push({ href: "/premium/dashboard", label: "Dashboard", icon: Home })
-    } else {
-      navLinks.push({ href: "/free-dashboard", label: "Dashboard", icon: Home })
-    }
+    // Single unified dashboard link
+    navLinks.push({ href: "/dashboard", label: "Dashboard", icon: Home })
     
     // Dashboard-specific navigation (only show when on dashboard)
     if (isDashboard) {
@@ -85,12 +80,19 @@ export default function Navbar() {
     if (!isDashboard && !isPremiumUser) {
       navLinks.push({ href: "/pricing", label: "Pricing", icon: TrendingUp })
     }
-    
-    // Admin link
-    if (userData?.role === "admin") {
-      navLinks.push({ href: "/admin", label: "Admin", icon: Shield })
-    }
   }
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (userMenuOpen && !target.closest('.user-menu-container')) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [userMenuOpen])
 
   if (!user) {
     const landingLinks = [
@@ -114,7 +116,7 @@ export default function Navbar() {
                   <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   <div className="relative p-1.5 rounded-xl border border-white/20 bg-black/40 backdrop-blur-sm group-hover:border-white/40 group-hover:bg-white/10 transition-all duration-300">
                     <img 
-                      src="/Tokenomicslab.ico" 
+                      src="/tokenomics-lab-logo.ico" 
                       alt="Tokenomics Lab" 
                       className="w-7 h-7 sm:w-9 sm:h-9 object-contain transition-all duration-500 group-hover:scale-110 group-hover:brightness-125 group-hover:drop-shadow-[0_0_16px_rgba(255,255,255,0.8)] group-hover:rotate-6" 
                     />
@@ -223,12 +225,12 @@ export default function Navbar() {
           <div className="relative px-4 sm:px-6">
             <div className="flex items-center justify-between h-14 sm:h-16">
               {/* Logo */}
-              <Link href={user ? (userData?.tier === "pro" ? "/premium/dashboard" : "/free-dashboard") : "/"} className="flex items-center gap-3 group">
+              <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-3 group">
                 <div className="relative">
                   <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   <div className="relative p-1.5 rounded-xl border border-white/20 bg-black/40 backdrop-blur-sm group-hover:border-white/40 group-hover:bg-white/10 transition-all duration-300">
                     <img 
-                      src="/Tokenomicslab.ico" 
+                      src="/tokenomics-lab-logo.ico" 
                       alt="Tokenomics Lab" 
                       className="w-7 h-7 sm:w-9 sm:h-9 object-contain transition-all duration-500 group-hover:scale-110 group-hover:brightness-125 group-hover:drop-shadow-[0_0_16px_rgba(255,255,255,0.8)] group-hover:rotate-6" 
                     />
@@ -278,28 +280,88 @@ export default function Navbar() {
                   <NotificationBell />
                 </div>
 
-                {/* Profile */}
-                <Link href="/profile" className="group">
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/20 hover:border-white/30 hover:bg-white/10 backdrop-blur-md transition-all duration-300 hover:shadow-md h-9">
-                    <div className="hidden lg:block text-right">
-                      <div className="text-[10px] font-bold text-white font-mono leading-tight">
-                        {user.email?.split('@')[0]?.toUpperCase()}
+                {/* User Menu Dropdown */}
+                <div className="relative user-menu-container">
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="relative p-2 rounded-xl border border-white/20 hover:border-white/30 hover:bg-white/10 backdrop-blur-md transition-all duration-300 hover:shadow-md h-9 w-9 flex items-center justify-center"
+                  >
+                    <User className="w-4 h-4 text-white" />
+                    {userData?.tier === "pro" && (
+                      <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-yellow-400 border border-black flex items-center justify-center">
+                        <span className="text-[6px] font-bold text-black">★</span>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {userMenuOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-white/10 bg-black/90 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-top-2 duration-200">
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent rounded-xl pointer-events-none"></div>
+                      
+                      <div className="relative p-2">
+                        {/* User Info */}
+                        <div className="px-3 py-2 mb-2 border-b border-white/10">
+                          <div className="text-xs font-bold text-white font-mono truncate">
+                            {user.email?.split('@')[0]?.toUpperCase()}
+                          </div>
+                          <div className="text-[10px] text-white/50 font-mono truncate">
+                            {user.email}
+                          </div>
+                        </div>
+
+                        {/* Menu Items */}
+                        <Link href="/profile" onClick={() => setUserMenuOpen(false)}>
+                          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 text-left">
+                            <User className="w-4 h-4" />
+                            <span className="text-xs font-mono">Profile</span>
+                          </button>
+                        </Link>
+
+                        <Link href="/dashboard" onClick={() => setUserMenuOpen(false)}>
+                          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 text-left">
+                            <Home className="w-4 h-4" />
+                            <span className="text-xs font-mono">Dashboard</span>
+                          </button>
+                        </Link>
+
+                        <Link href="/dashboard#settings" onClick={() => setUserMenuOpen(false)}>
+                          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 text-left">
+                            <Shield className="w-4 h-4" />
+                            <span className="text-xs font-mono">Settings</span>
+                          </button>
+                        </Link>
+
+                        <Link href="/dashboard#history" onClick={() => setUserMenuOpen(false)}>
+                          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 text-left">
+                            <Activity className="w-4 h-4" />
+                            <span className="text-xs font-mono">History</span>
+                          </button>
+                        </Link>
+
+                        {userData?.role === "admin" && (
+                          <Link href="/admin" onClick={() => setUserMenuOpen(false)}>
+                            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 text-left border-t border-white/10 mt-2 pt-2">
+                              <Shield className="w-4 h-4" />
+                              <span className="text-xs font-mono">Admin Panel</span>
+                            </button>
+                          </Link>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setUserMenuOpen(false)
+                            handleLogout()
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 text-white/70 hover:text-red-400 transition-all duration-200 text-left border-t border-white/10 mt-2 pt-2"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span className="text-xs font-mono">Logout</span>
+                        </button>
                       </div>
                     </div>
-                    <div className="w-5 h-5 rounded-lg border border-white/40 bg-black/40 backdrop-blur-sm group-hover:bg-white group-hover:border-white flex items-center justify-center transition-all duration-300">
-                      <User className="w-3 h-3 text-white group-hover:text-black transition-colors" />
-                    </div>
-                  </div>
-                </Link>
-
-                {/* Logout */}
-                <button
-                  onClick={handleLogout}
-                  className="p-2 rounded-xl border border-white/20 hover:border-red-400/50 hover:bg-red-500/10 backdrop-blur-md transition-all duration-300 group hover:shadow-md hover:shadow-red-500/10 h-9 w-9 flex items-center justify-center"
-                  title="Logout"
-                >
-                  <LogOut className="w-3.5 h-3.5 text-white/60 group-hover:text-red-400 transition-all duration-300 group-hover:scale-110 group-hover:-rotate-12" />
-                </button>
+                  )}
+                </div>
               </div>
 
               {/* Mobile Menu Button */}
@@ -346,13 +408,11 @@ export default function Navbar() {
                   <div className="text-[9px] text-white/50 font-mono truncate">
                     {user?.email}
                   </div>
-                </div>
-                <div className={`px-2.5 py-1 rounded-lg border backdrop-blur-md font-mono text-[9px] font-bold ${
-                  userData?.tier === "pro"
-                    ? "text-white border-white/40 bg-white/15 shadow-md"
-                    : "text-white/60 border-white/20 bg-white/5"
-                }`}>
-                  {userData?.tier === "pro" ? "⚡ PRO" : "FREE"}
+                  {userData?.tier === "pro" && (
+                    <div className="inline-block mt-1 px-2 py-0.5 rounded bg-white/20 border border-white/30">
+                      <span className="text-[8px] font-bold text-white font-mono">⚡ PRO</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -389,6 +449,35 @@ export default function Navbar() {
                   <User className="w-4 h-4" />
                   <span className="font-bold tracking-wider">PROFILE</span>
                 </Link>
+
+                <Link
+                  href="/dashboard#settings"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-white/20 hover:border-white/30 hover:bg-white/10 backdrop-blur-md text-white/60 hover:text-white transition-all duration-300 font-mono text-[10px]"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span className="font-bold tracking-wider">SETTINGS</span>
+                </Link>
+
+                <Link
+                  href="/dashboard#history"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-white/20 hover:border-white/30 hover:bg-white/10 backdrop-blur-md text-white/60 hover:text-white transition-all duration-300 font-mono text-[10px]"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span className="font-bold tracking-wider">HISTORY</span>
+                </Link>
+
+                {userData?.role === "admin" && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl border border-white/20 hover:border-white/30 hover:bg-white/10 backdrop-blur-md text-white/60 hover:text-white transition-all duration-300 font-mono text-[10px]"
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span className="font-bold tracking-wider">ADMIN PANEL</span>
+                  </Link>
+                )}
                 
                 <button
                   onClick={() => {

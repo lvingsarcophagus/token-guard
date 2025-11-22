@@ -98,7 +98,11 @@ export default function LoginPage() {
     setError("")
 
     try {
+      // Request additional user info scopes
       const provider = new GoogleAuthProvider()
+      provider.addScope('profile')
+      provider.addScope('email')
+      
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
@@ -106,15 +110,22 @@ export default function LoginPage() {
       const userDoc = await getDoc(doc(db, "users", user.uid))
       
       if (!userDoc.exists()) {
-        // Create user profile for new Google sign-ins
+        // Extract user info from Google profile
+        const displayName = user.displayName || ""
+        const photoURL = user.photoURL || null
+        const email = user.email || ""
+        
+        // Create user profile for new Google sign-ins with collected info
         await setDoc(doc(db, "users", user.uid), {
           uid: user.uid,
-          email: user.email,
-          name: user.displayName || "",
+          email: email,
+          name: displayName,
+          photoURL: photoURL,
           company: null,
           country: null,
           tier: "FREE",
           plan: "FREE",
+          role: "user",
           dailyAnalyses: 0,
           totalAnalyses: 0,
           watchlist: [],
@@ -127,7 +138,8 @@ export default function LoginPage() {
           metadata: {
             signupSource: "google",
             userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
-            signupIp: null
+            signupIp: null,
+            provider: "google"
           },
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
@@ -136,12 +148,17 @@ export default function LoginPage() {
 
         analyticsEvents.signup('google')
       } else {
+        // Update last login time
+        await setDoc(doc(db, "users", user.uid), {
+          lastLoginAt: new Date().toISOString()
+        }, { merge: true })
+        
         analyticsEvents.login('google')
       }
       
-      // Wait for auth context to update
+      // Redirect to unified dashboard
       setTimeout(() => {
-        router.push("/premium/dashboard") // Will auto-redirect FREE users to free-dashboard
+        router.push("/dashboard")
       }, 500)
     } catch (error: unknown) {
       console.error("Google login failed:", error)
