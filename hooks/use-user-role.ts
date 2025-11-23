@@ -60,9 +60,13 @@ export function useUserRole(): UserRoleData {
         
         if (userDoc.exists()) {
           const userData = userDoc.data()
-          const userRole = userData.role || 'FREE'
-          setRole(userRole)
-          setIsAdmin(!!userData.admin)
+          const userRole = userData.role || 'user'
+          
+          // Check if user is admin
+          const isAdminUser = userRole === 'admin' || !!userData.admin
+          
+          setRole(userRole.toUpperCase() as UserRole)
+          setIsAdmin(isAdminUser)
         } else {
           // New user - default to FREE
           setRole('FREE')

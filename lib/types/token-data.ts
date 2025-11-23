@@ -102,6 +102,9 @@ export interface RiskResult {
     key_insights: string[];
     generated_at?: string;
   };
+
+  // Positive Signals (Solana-specific good indicators)
+  positive_signals?: string[];
 }
 
 export interface RiskBreakdown {

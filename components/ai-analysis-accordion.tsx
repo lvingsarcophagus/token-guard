@@ -47,7 +47,7 @@ export default function AIAnalysisAccordion({
     }
   };
 
-  const recommendationText = aiSummary.recommendation.replace(/_/g, ' ');
+  const recommendationText = (aiSummary.recommendation || 'NEUTRAL').replace(/_/g, ' ');
 
   return (
     <div
@@ -72,9 +72,8 @@ export default function AIAnalysisAccordion({
           </div>
         </div>
         <ChevronDown
-          className={`w-5 h-5 text-gray-400 transition-transform ${
-            expanded ? 'transform rotate-180' : ''
-          }`}
+          className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'transform rotate-180' : ''
+            }`}
         />
       </button>
 

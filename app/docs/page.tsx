@@ -1,15 +1,18 @@
 "use client"
 
 import Link from "next/link"
+import Navbar from "@/components/navbar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, Zap, Search, TrendingUp, Lock, BarChart3, Eye, Activity, Database, Globe, CheckCircle, ArrowRight, AlertTriangle, Users, Target, Flame, Bell, Settings, ArrowLeft } from "lucide-react"
+import { Shield, Zap, Search, TrendingUp, Eye, CheckCircle, ArrowRight, AlertTriangle, Users, Bell, Settings, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export default function DocsPage() {
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Hero Section */}
-      <section className="relative px-6 py-20 border-b border-white/10">
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-black text-white pt-20">
+        {/* Hero Section */}
+        <section className="relative px-6 py-20 border-b border-white/10">
         <div className="max-w-5xl mx-auto">
           {/* Back Button */}
           <Link href="/">
@@ -56,6 +59,12 @@ export default function DocsPage() {
         <div className="max-w-5xl mx-auto">
           <h2 className="text-2xl font-bold text-white mb-6 font-mono">TABLE OF CONTENTS</h2>
           <div className="grid md:grid-cols-2 gap-4">
+            <Link href="/docs/algorithm" className="block p-4 border border-white/20 hover:border-white/40 bg-black/40 backdrop-blur-sm transition-all group">
+              <div className="flex items-center justify-between">
+                <span className="text-white/90 font-mono text-sm">00. Risk Algorithm</span>
+                <ArrowRight className="w-4 h-4 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
+              </div>
+            </Link>
             <a href="#getting-started" className="block p-4 border border-white/20 hover:border-white/40 bg-black/40 backdrop-blur-sm transition-all">
               <span className="text-white/90 font-mono text-sm">01. Getting Started</span>
             </a>
@@ -756,6 +765,7 @@ export default function DocsPage() {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   )
 }

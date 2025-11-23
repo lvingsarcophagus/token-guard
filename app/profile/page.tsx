@@ -12,10 +12,17 @@ import { theme } from "@/lib/theme"
 import Navbar from "@/components/navbar"
 import { Download, Trash2, Shield } from "lucide-react"
 import TwoFactorSetup from "@/components/two-factor-setup"
+import ProfileImageUpload from "@/components/profile-image-upload"
+import Loader from "@/components/loader"
+import CustomModal from "@/components/custom-modal"
+import { useModal } from "@/hooks/use-modal"
 
 export default function ProfilePage() {
   const { user, userData, updateProfile, loading } = useAuth()
+  const { modalState, closeModal, showSuccess, showError, showConfirm } = useModal()
   const [name, setName] = useState("")
+  const [company, setCompany] = useState("")
+  const [country, setCountry] = useState("")
   const [saving, setSaving] = useState(false)
   const [walletAddress, setWalletAddress] = useState("")
   const [connectingWallet, setConnectingWallet] = useState(false)
@@ -29,8 +36,21 @@ export default function ProfilePage() {
     if (!loading && !user) {
       router.push("/login")
     }
+    // Set fields from userData
     if (userData?.name) {
       setName(userData.name)
+    } else {
+      setName('')
+    }
+    if (userData?.company) {
+      setCompany(userData.company)
+    } else {
+      setCompany('')
+    }
+    if (userData?.country) {
+      setCountry(userData.country)
+    } else {
+      setCountry('')
     }
     if (userData?.walletAddress) {
       setWalletAddress(userData.walletAddress)
@@ -39,9 +59,14 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     setSaving(true)
-    await updateProfile({ name })
-    setSaving(false)
-    alert("Profile updated!")
+    try {
+      await updateProfile({ name, company, country })
+      showSuccess("Profile Updated", "Your profile information has been saved successfully!")
+    } catch (error) {
+      showError("Update Failed", "Failed to update profile. Please try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleConnectWallet = async () => {
@@ -50,9 +75,9 @@ export default function ProfilePage() {
       interface EthereumProvider {
         request: (args: { method: string }) => Promise<string[]>
       }
-      
+
       const windowWithEthereum = window as unknown as { ethereum?: EthereumProvider }
-      
+
       if (typeof window !== "undefined" && windowWithEthereum.ethereum) {
         const accounts = await windowWithEthereum.ethereum.request({
           method: "eth_requestAccounts",
@@ -60,22 +85,28 @@ export default function ProfilePage() {
         const address = accounts[0]
         setWalletAddress(address)
         await updateProfile({ walletAddress: address })
-        alert("Wallet connected successfully!")
+        showSuccess("Wallet Connected", "Your wallet has been connected successfully!")
       } else {
-        alert("Please install MetaMask or Phantom wallet extension")
+        showError("Wallet Not Found", "Please install MetaMask or Phantom wallet extension to continue.")
       }
     } catch (error) {
       console.error("Error connecting wallet:", error)
-      alert("Failed to connect wallet")
+      showError("Connection Failed", "Failed to connect wallet. Please try again.")
     } finally {
       setConnectingWallet(false)
     }
   }
 
   const handleDisconnectWallet = async () => {
-    setWalletAddress("")
-    await updateProfile({ walletAddress: "" })
-    alert("Wallet disconnected")
+    showConfirm(
+      "Disconnect Wallet",
+      "Are you sure you want to disconnect your wallet?",
+      async () => {
+        setWalletAddress("")
+        await updateProfile({ walletAddress: "" })
+        showSuccess("Wallet Disconnected", "Your wallet has been disconnected.")
+      }
+    )
   }
 
   const handleExportData = async () => {
@@ -102,10 +133,10 @@ export default function ProfilePage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      alert("Your data has been exported successfully!")
+      showSuccess("Data Exported", "Your data has been exported successfully!")
     } catch (error) {
       console.error('Error exporting data:', error)
-      alert("Failed to export data. Please try again.")
+      showError("Export Failed", "Failed to export data. Please try again.")
     } finally {
       setExportingData(false)
     }
@@ -113,7 +144,7 @@ export default function ProfilePage() {
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== "DELETE MY ACCOUNT") {
-      alert("Please type 'DELETE MY ACCOUNT' to confirm")
+      showError("Confirmation Required", "Please type 'DELETE MY ACCOUNT' to confirm deletion.")
       return
     }
 
@@ -138,29 +169,39 @@ export default function ProfilePage() {
         throw new Error(errorData.error || 'Failed to delete account')
       }
 
-      alert("✅ Your account has been permanently deleted. You will be redirected to the home page.")
-      
-      // Redirect to home (user will be automatically signed out by the API)
-      router.push('/')
+      showSuccess(
+        "Account Deleted",
+        "Your account has been permanently deleted. You will be redirected to the home page.",
+        () => router.push('/')
+      )
     } catch (error) {
       console.error('Error deleting account:', error)
-      alert("❌ Failed to delete account. Please try again or contact support.")
+      showError("Deletion Failed", "Failed to delete account. Please try again or contact support.")
       setDeletingAccount(false)
     }
   }
 
   if (loading) {
-    return (
-      <div className={`min-h-screen ${theme.backgrounds.main} flex items-center justify-center`}>
-        <div className={`${theme.text.primary} ${theme.fonts.mono} ${theme.fonts.tracking}`}>LOADING...</div>
-      </div>
-    )
+    return <Loader fullScreen text="Loading profile" />
   }
 
   if (!user) return null
 
   return (
-    <div className={`relative min-h-screen ${theme.backgrounds.main} overflow-hidden`}>
+    <>
+      <CustomModal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        showCancel={modalState.showCancel}
+      />
+      
+      <div className={`relative min-h-screen ${theme.backgrounds.main} overflow-hidden`}>
       {/* Stars background */}
       <div className="fixed inset-0 stars-bg pointer-events-none"></div>
 
@@ -190,6 +231,15 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
+                <Label className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
+                  Profile Image
+                </Label>
+                <div className="mt-2">
+                  <ProfileImageUpload />
+                </div>
+              </div>
+
+              <div>
                 <Label htmlFor="name" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
                   Full Name
                 </Label>
@@ -215,6 +265,34 @@ export default function ProfilePage() {
                 />
               </div>
 
+              <div>
+                <Label htmlFor="company" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
+                  Company (Optional)
+                </Label>
+                <Input
+                  id="company"
+                  type="text"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder="Your company name"
+                  className={`mt-1 ${theme.inputs.boxed}`}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="country" className={`${theme.text.secondary} ${theme.fonts.mono} ${theme.text.small} ${theme.fonts.tracking} uppercase`}>
+                  Country (Optional)
+                </Label>
+                <Input
+                  id="country"
+                  type="text"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder="Your country"
+                  className={`mt-1 ${theme.inputs.boxed}`}
+                />
+              </div>
+
               <Button
                 onClick={handleSave}
                 disabled={saving}
@@ -234,11 +312,11 @@ export default function ProfilePage() {
                 <div>
                   <div className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} uppercase ${theme.fonts.tracking}`}>Current Plan</div>
                   <div className={`${theme.text.xlarge} ${theme.fonts.bold} ${theme.text.primary} mt-1 ${theme.fonts.mono} ${theme.fonts.tracking}`}>
-                    {userData?.tier === "pro" ? "PRO" : "FREE"}
+                    {(userData?.tier === "pro" || userData?.plan === "PREMIUM") ? "PREMIUM" : "FREE"}
                   </div>
                 </div>
 
-                {userData?.tier === "free" && (
+                {(userData?.tier === "free" || userData?.plan === "FREE") && (
                   <Link href="/pricing">
                     <Button className={`${theme.buttons.secondary} uppercase`}>
                       UPGRADE TO PRO
@@ -247,7 +325,7 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              {userData?.tier === "pro" && userData?.nextBillingDate && (
+              {(userData?.tier === "pro" || userData?.plan === "PREMIUM") && userData?.nextBillingDate && (
                 <div className={`mt-4 pt-4 border-t ${theme.borders.default} ${theme.text.secondary} ${theme.text.base} ${theme.fonts.mono}`}>
                   Next billing date: {userData.nextBillingDate}
                 </div>
@@ -416,6 +494,8 @@ export default function ProfilePage() {
         </div>
       )}
 
+      </div>
+      
       <style jsx>{`
         .stars-bg {
           background-image: 
@@ -432,6 +512,6 @@ export default function ProfilePage() {
           opacity: 0.3;
         }
       `}</style>
-    </div>
+    </>
   )
 }

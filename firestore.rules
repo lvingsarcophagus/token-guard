@@ -1,0 +1,129 @@
+// Firebase Security Rules for Firestore
+// Updated with activity logging and admin features
+// Deploy: Firebase Console > Firestore Database > Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isPremium(userId) {
+      return isAuthenticated() && isOwner(userId) && 
+             get(/databases/$(database)/documents/users/$(userId)).data.plan == 'PREMIUM';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin(); // Only admins can delete users
+    }
+    
+    // Activity logs collection - NEW: Admin monitoring
+    match /activity_logs/{logId} {
+      // Only admins can read activity logs
+      allow read: if isAdmin();
+      
+      // Any authenticated user can create logs (for their own activities)
+      allow create: if isAuthenticated();
+      
+      // No updates or deletes allowed (audit trail integrity)
+      allow update, delete: if false;
+    }
+    
+    // Watchlist subcollection
+    match /watchlist/{userId}/tokens/{tokenAddress} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    // Alerts subcollection (Premium only for creation)
+    match /alerts/{userId}/notifications/{alertId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isPremium(userId);
+      allow update: if isOwner(userId); // Can mark as read/dismissed
+      allow delete: if isOwner(userId);
+    }
+    
+    // Analysis history subcollection
+    match /analysis_history/{userId}/scans/{scanId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if false; // Immutable
+      allow delete: if isOwner(userId);
+    }
+    
+    // Portfolio collection (Premium only)
+    match /portfolio/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isPremium(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    // Notifications collection - NEW: For notification bell
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // System can create notifications
+      allow create: if isAuthenticated();
+      
+      // Users can update/delete their own notifications
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Admin notification preferences
+    match /admin_notification_preferences/{userId} {
+      allow read, write: if isOwner(userId) && isAdmin();
+    }
+    
+    // Settings collection
+    match /settings/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+      allow delete: if false; // Never delete settings
+    }
+    
+    // System settings (admin only)
+    match /system/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Token cache (read-only for users, write for system/admin)
+    match /token_cache/{tokenAddress} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Legacy collections (backward compatibility)
+    match /tokens/{tokenId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    match /watchlists/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

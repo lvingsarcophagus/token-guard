@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label"
 import { Shield } from "lucide-react"
 import { theme } from "@/lib/theme"
 import { analyticsEvents } from "@/lib/firebase-analytics"
+import Navbar from "@/components/navbar"
+import { logAuth } from "@/lib/services/activity-logger"
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("")
@@ -111,6 +113,9 @@ export default function SignUpPage() {
       // Track signup event
       analyticsEvents.signup('email')
       
+      // Log user signup
+      await logAuth(userCredential.user.uid, email, 'user_signup')
+      
       // Redirect based on tier
       router.push(redirectPath)
     } catch (error: unknown) {
@@ -144,7 +149,11 @@ export default function SignUpPage() {
     setError("")
 
     try {
+      // Request additional user info scopes
       const provider = new GoogleAuthProvider()
+      provider.addScope('profile')
+      provider.addScope('email')
+      
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
@@ -152,15 +161,22 @@ export default function SignUpPage() {
       const userDoc = await getDoc(doc(db, "users", user.uid))
       
       if (!userDoc.exists()) {
-        // Create user profile in Firestore for new Google users
+        // Extract user info from Google profile
+        const displayName = user.displayName || ""
+        const photoURL = user.photoURL || null
+        const email = user.email || ""
+        
+        // Create user profile in Firestore for new Google users with collected info
         await setDoc(doc(db, "users", user.uid), {
           uid: user.uid,
-          email: user.email,
-          name: user.displayName || "",
+          email: email,
+          name: displayName,
+          photoURL: photoURL,
           company: null,
           country: null,
           tier: "FREE",
           plan: "FREE",
+          role: "user",
           usage: {
             tokensAnalyzed: 0,
             lastResetDate: new Date(),
@@ -178,7 +194,8 @@ export default function SignUpPage() {
           metadata: {
             signupSource: "google",
             userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
-            signupIp: null
+            signupIp: null,
+            provider: "google"
           },
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
@@ -188,12 +205,17 @@ export default function SignUpPage() {
         // Track signup event
         analyticsEvents.signup('google')
       } else {
+        // Update last login time
+        await setDoc(doc(db, "users", user.uid), {
+          lastLoginAt: new Date().toISOString()
+        }, { merge: true })
+        
         // Track login event for existing users
         analyticsEvents.login('google')
       }
       
-      // Redirect to free dashboard
-      router.push("/free-dashboard")
+      // Redirect to unified dashboard
+      router.push("/dashboard")
     } catch (error: unknown) {
       console.error("Google sign up failed:", error)
       const err = error as { code?: string; message?: string }
@@ -211,7 +233,9 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className={`relative min-h-screen flex items-center justify-center ${theme.backgrounds.main} overflow-hidden p-4`}>
+    <>
+      <Navbar />
+      <div className={`relative min-h-screen flex items-center justify-center ${theme.backgrounds.main} overflow-hidden p-4`}>
       {/* Stars background */}
       <div className="fixed inset-0 stars-bg pointer-events-none"></div>
 
@@ -446,5 +470,6 @@ export default function SignUpPage() {
         }
       `}</style>
     </div>
+    </>
   )
 }

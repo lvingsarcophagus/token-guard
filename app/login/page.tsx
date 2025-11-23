@@ -17,6 +17,8 @@ import { theme } from "@/lib/theme"
 import { analyticsEvents } from "@/lib/firebase-analytics"
 import { has2FAEnabled } from "@/lib/totp"
 import TwoFactorVerify from "@/components/two-factor-verify"
+import Navbar from "@/components/navbar"
+import { logAuth } from "@/lib/services/activity-logger"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -59,6 +61,9 @@ export default function LoginPage() {
         setLoading(false)
       } else {
         // No 2FA, proceed with login
+        // Log successful login
+        await logAuth(userId, userCredential.user.email || '', 'user_login')
+        
         setTimeout(() => {
           router.push("/premium/dashboard") // Will auto-redirect FREE users to free-dashboard
         }, 500)
@@ -97,7 +102,11 @@ export default function LoginPage() {
     setError("")
 
     try {
+      // Request additional user info scopes
       const provider = new GoogleAuthProvider()
+      provider.addScope('profile')
+      provider.addScope('email')
+      
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
@@ -105,15 +114,22 @@ export default function LoginPage() {
       const userDoc = await getDoc(doc(db, "users", user.uid))
       
       if (!userDoc.exists()) {
-        // Create user profile for new Google sign-ins
+        // Extract user info from Google profile
+        const displayName = user.displayName || ""
+        const photoURL = user.photoURL || null
+        const email = user.email || ""
+        
+        // Create user profile for new Google sign-ins with collected info
         await setDoc(doc(db, "users", user.uid), {
           uid: user.uid,
-          email: user.email,
-          name: user.displayName || "",
+          email: email,
+          name: displayName,
+          photoURL: photoURL,
           company: null,
           country: null,
           tier: "FREE",
           plan: "FREE",
+          role: "user",
           dailyAnalyses: 0,
           totalAnalyses: 0,
           watchlist: [],
@@ -126,7 +142,8 @@ export default function LoginPage() {
           metadata: {
             signupSource: "google",
             userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
-            signupIp: null
+            signupIp: null,
+            provider: "google"
           },
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
@@ -134,13 +151,22 @@ export default function LoginPage() {
         })
 
         analyticsEvents.signup('google')
+        // Log new user signup
+        await logAuth(user.uid, email, 'user_signup')
       } else {
+        // Update last login time
+        await setDoc(doc(db, "users", user.uid), {
+          lastLoginAt: new Date().toISOString()
+        }, { merge: true })
+        
         analyticsEvents.login('google')
+        // Log successful login
+        await logAuth(user.uid, user.email || '', 'user_login')
       }
       
-      // Wait for auth context to update
+      // Redirect to unified dashboard
       setTimeout(() => {
-        router.push("/premium/dashboard") // Will auto-redirect FREE users to free-dashboard
+        router.push("/dashboard")
       }, 500)
     } catch (error: unknown) {
       console.error("Google login failed:", error)
@@ -158,8 +184,14 @@ export default function LoginPage() {
     }
   }
 
-  const handle2FASuccess = () => {
+  const handle2FASuccess = async () => {
     setShow2FA(false)
+    
+    // Log successful login after 2FA
+    if (pendingUserId && auth.currentUser) {
+      await logAuth(pendingUserId, auth.currentUser.email || '', 'user_login')
+    }
+    
     setPendingUserId(null)
     // Proceed with login
     setTimeout(() => {
@@ -177,6 +209,7 @@ export default function LoginPage() {
 
   return (
     <>
+      <Navbar />
       {show2FA && pendingUserId && (
         <TwoFactorVerify
           userId={pendingUserId}

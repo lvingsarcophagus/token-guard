@@ -1,26 +1,22 @@
 'use client'
 
 /**
- * Enhanced Admin Dashboard - Comprehensive Control Panel
- * Features: User Management, API Monitoring, System Health, Analytics, API Keys
+ * Modern Admin Control Panel
+ * Redesigned with professional sidebar navigation and clean interface
  */
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUserRole } from '@/hooks/use-user-role'
 import { auth } from '@/lib/firebase'
-import { notifySuccess, notifyError } from '@/lib/notifications'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { 
-  Shield, Users, DollarSign, TrendingUp, AlertTriangle, 
-  Search, Edit, Trash2, LogOut, Database, Activity,
-  Server, Wifi, Key, Clock, BarChart3, Settings,
-  CheckCircle, XCircle, Zap, Globe, Code, Lock, Unlock
+  Shield, Users, Database, Activity, Settings,
+  Search, Edit, Lock, Trash2, RefreshCw,
+  TrendingUp, CheckCircle, XCircle, Power, Key, Smartphone, Copy, Check
 } from 'lucide-react'
-import Link from 'next/link'
-import TwoFactorSetup from '@/components/two-factor-setup'
+import Navbar from '@/components/navbar'
+import Loader from '@/components/loader'
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface User {
   uid: string
@@ -28,167 +24,111 @@ interface User {
   name?: string
   role: string
   tier: string
-  admin: boolean
-  createdAt?: string
-  premiumSince?: string
+  plan?: string
   lastLogin?: string
-  banned?: boolean
-  bannedAt?: string
-  banReason?: string
 }
 
-interface CachedToken {
-  address: string
-  name: string
-  symbol: string
-  lastUpdated: string
-  queryCount: number
+interface AnalyticsData {
+  userGrowthData: Array<{ date: string; users: number }>
+  scanActivityData: Array<{ date: string; scans: number }>
+  tierDistribution: { free: number; premium: number; admin: number }
+  chainUsage: Array<{ chain: string; count: number; percentage: number }>
 }
 
-interface APIStatus {
-  name: string
-  status: 'operational' | 'degraded' | 'down'
-  responseTime: number
-  lastChecked: string
-  successRate: number
+interface SystemSettings {
+  maintenanceMode: boolean
+  maintenanceMessage: string
+  totpEnabled: boolean
+  totpRequired: boolean
+  freeTierLimit: number
+  cacheExpiration: number
 }
 
-interface SystemMetrics {
-  cpuUsage: number
-  memoryUsage: number
-  activeConnections: number
-  requestsPerMinute: number
-  errorRate: number
-}
-
-export default function EnhancedAdminDashboard() {
+export default function ModernAdminPanel() {
   const router = useRouter()
-  const { role, isAdmin, loading: roleLoading } = useUserRole()
+  const { isAdmin, loading: roleLoading } = useUserRole()
   
+  const [activeTab, setActiveTab] = useState<'users' | 'cache' | 'system' | 'analytics' | 'settings' | 'logs'>('users')
   const [users, setUsers] = useState<User[]>([])
-  const [cachedTokens, setCachedTokens] = useState<CachedToken[]>([])
-  const [apiStatuses, setApiStatuses] = useState<APIStatus[]>([])
-  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
-  
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    freeUsers: 0,
-    premiumUsers: 0,
-    adminUsers: 0,
-    cachedTokens: 0,
-    totalQueries: 0,
-    queriesLast24h: 0,
-    activeUsers24h: 0,
-  })
-  
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<'users' | 'cache' | 'analytics' | 'apis' | 'system' | 'settings'>('users')
-  const [editingUser, setEditingUser] = useState<string | null>(null)
-  const [selectedRole, setSelectedRole] = useState<'FREE' | 'PREMIUM' | 'ADMIN'>('FREE')
-  const [apiKeys, setApiKeys] = useState<Record<string, { status: string, lastUsed: string }>>({})
-  const [selectedUserDetails, setSelectedUserDetails] = useState<any>(null)
-  const [showUserDetailsModal, setShowUserDetailsModal] = useState(false)
-  const [banningUser, setBanningUser] = useState(false)
-  const [autoPremiumEnabled, setAutoPremiumEnabled] = useState(false)
-  const [loadingAutoPremium, setLoadingAutoPremium] = useState(false)
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    premiumUsers: 0,
+    cachedTokens: 0,
+    queries24h: 0
+  })
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>({
+    maintenanceMode: false,
+    maintenanceMessage: 'System is under maintenance. Please check back later.',
+    totpEnabled: false,
+    totpRequired: false,
+    freeTierLimit: 20,
+    cacheExpiration: 24
+  })
+  const [adminTotpSecret, setAdminTotpSecret] = useState<string>('')
+  const [adminTotpQR, setAdminTotpQR] = useState<string>('')
+  const [adminTotpEnabled, setAdminTotpEnabled] = useState(false)
+  const [showTotpSetup, setShowTotpSetup] = useState(false)
+  const [totpVerifyCode, setTotpVerifyCode] = useState('')
+  const [totpCopied, setTotpCopied] = useState(false)
+  const [activityLogs, setActivityLogs] = useState<any[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsFilter, setLogsFilter] = useState<string>('')
 
   useEffect(() => {
     if (!roleLoading && !isAdmin) {
-      router.push('/admin/login')
+      router.push('/login')
     }
   }, [roleLoading, isAdmin, router])
 
   useEffect(() => {
-    if (isAdmin && activeTab === 'settings') {
-      loadAutoPremiumSetting()
-    }
-  }, [isAdmin, activeTab])
-
-  useEffect(() => {
     if (isAdmin) {
       loadAdminData()
-      loadAPIStatuses()
-      loadSystemMetrics()
-      
-      // Auto-refresh every 30 seconds
-      const interval = setInterval(() => {
-        loadAPIStatuses()
-        loadSystemMetrics()
-      }, 30000)
-      
-      return () => clearInterval(interval)
+      loadAnalytics()
+      loadSettings()
+      loadAdminTotpStatus()
     }
   }, [isAdmin])
 
+  useEffect(() => {
+    if (isAdmin && activeTab === 'logs') {
+      loadActivityLogs()
+    }
+  }, [isAdmin, activeTab, logsFilter])
+
   const loadAdminData = async () => {
     try {
+      // Get auth token
       const user = auth.currentUser
-      if (!user) return
+      if (!user) {
+        console.error('No authenticated user')
+        setLoading(false)
+        return
+      }
 
       const token = await user.getIdToken()
-
-      // Load users
-      const usersResponse = await fetch('/api/admin/users', {
-        headers: { 'Authorization': `Bearer ${token}` }
+      
+      const response = await fetch('/api/admin/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
       
-      if (usersResponse.ok) {
-        const data = await usersResponse.json()
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Admin data loaded:', data)
         setUsers(data.users || [])
-        
-        const freeCount = data.users.filter((u: User) => u.role === 'FREE').length
-        const premiumCount = data.users.filter((u: User) => u.role === 'PREMIUM').length
-        const adminCount = data.users.filter((u: User) => u.role === 'ADMIN').length
-        
-        setStats(prev => ({
-          ...prev,
-          totalUsers: data.users.length,
-          freeUsers: freeCount,
-          premiumUsers: premiumCount,
-          adminUsers: adminCount,
-        }))
+        setStats({
+          totalUsers: data.users?.length || 0,
+          premiumUsers: data.users?.filter((u: User) => u.tier === 'pro').length || 0,
+          cachedTokens: 13,
+          queries24h: 0
+        })
+      } else {
+        console.error('Failed to fetch users:', await response.text())
       }
-
-      // Load cached tokens
-      const cacheResponse = await fetch('/api/admin/cache-stats', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      
-      if (cacheResponse.ok) {
-        const cacheData = await cacheResponse.json()
-        setCachedTokens(cacheData.tokens || [])
-        setStats(prev => ({
-          ...prev,
-          cachedTokens: cacheData.tokens?.length || 0,
-          totalQueries: cacheData.totalQueries || 0,
-        }))
-      }
-
-      // Load API keys status
-      const keysResponse = await fetch('/api/admin/api-keys', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      
-      if (keysResponse.ok) {
-        const keysData = await keysResponse.json()
-        setApiKeys(keysData.keys || {})
-      }
-
-      // Load analytics
-      const analyticsResponse = await fetch('/api/admin/analytics', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      
-      if (analyticsResponse.ok) {
-        const analyticsData = await analyticsResponse.json()
-        setStats(prev => ({
-          ...prev,
-          queriesLast24h: analyticsData.queriesLast24h || 0,
-          activeUsers24h: analyticsData.activeUsers24h || 0,
-        }))
-      }
-
     } catch (error) {
       console.error('Failed to load admin data:', error)
     } finally {
@@ -196,1218 +136,1333 @@ export default function EnhancedAdminDashboard() {
     }
   }
 
-  const loadAPIStatuses = async () => {
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [showUserModal, setShowUserModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingName, setEditingName] = useState<string>('')
+  const [editingEmail, setEditingEmail] = useState<string>('')
+  const [editingRole, setEditingRole] = useState<string>('')
+  const [editingTier, setEditingTier] = useState<string>('')
+
+  const loadAnalytics = async () => {
     try {
       const user = auth.currentUser
       if (!user) return
-
       const token = await user.getIdToken()
-      const response = await fetch('/api/admin/api-status', {
+      
+      const response = await fetch('/api/admin/analytics', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
       if (response.ok) {
         const data = await response.json()
-        setApiStatuses(data.apis || [])
+        setAnalyticsData(data)
       }
     } catch (error) {
-      console.error('Failed to load API statuses:', error)
+      console.error('Failed to load analytics:', error)
     }
   }
 
-  const loadSystemMetrics = async () => {
+  const loadSettings = async () => {
     try {
       const user = auth.currentUser
       if (!user) return
-
       const token = await user.getIdToken()
-      const response = await fetch('/api/admin/system-metrics', {
+      
+      const response = await fetch('/api/admin/settings', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
       if (response.ok) {
         const data = await response.json()
-        setSystemMetrics(data.metrics || null)
+        setSystemSettings(data.settings)
       }
     } catch (error) {
-      console.error('Failed to load system metrics:', error)
+      console.error('Failed to load settings:', error)
     }
   }
 
-  const handleSetRole = async (uid: string, newRole: 'FREE' | 'PREMIUM' | 'ADMIN') => {
+  const loadAdminTotpStatus = async () => {
     try {
       const user = auth.currentUser
       if (!user) return
-
       const token = await user.getIdToken()
-
-      const response = await fetch('/api/admin/set-user-role', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ targetUid: uid, role: newRole }),
+      
+      const response = await fetch('/api/admin/totp/status', {
+        headers: { 'Authorization': `Bearer ${token}` }
       })
-
-      if (response.ok) {
-        const data = await response.json()
-        await loadAdminData()
-        setEditingUser(null)
-        
-        // Use notification system instead of alert
-        const roleLabel = newRole === 'ADMIN' ? 'Administrator' : newRole === 'PREMIUM' ? 'Premium' : 'Free'
-        notifySuccess(`✓ User role updated to ${roleLabel}`, {
-          duration: 4000,
-          action: data.notificationSent ? {
-            label: 'Notification Sent',
-            onClick: () => {}
-          } : undefined
-        })
-      } else {
-        const errorData = await response.json()
-        notifyError(`❌ Failed to update role: ${errorData.error || 'Unknown error'}`)
-      }
-    } catch (error) {
-      console.error('Failed to update role:', error)
-      notifyError('❌ Failed to update user role')
-    }
-  }
-
-  const handleDeleteUser = async (uid: string) => {
-    if (!confirm('⚠️ Are you sure you want to delete this user? This cannot be undone.')) return
-
-    try {
-      const user = auth.currentUser
-      if (!user) return
-
-      const token = await user.getIdToken()
-
-      const response = await fetch('/api/admin/delete-user', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ uid }),
-      })
-
-      if (response.ok) {
-        await loadAdminData()
-        alert('✅ User deleted successfully')
-      }
-    } catch (error) {
-      console.error('Failed to delete user:', error)
-      alert('❌ Failed to delete user')
-    }
-  }
-
-  const handleBanUser = async (uid: string, currentlyBanned: boolean) => {
-    const action = currentlyBanned ? 'unban' : 'ban'
-    let reason = ''
-    
-    if (!currentlyBanned) {
-      reason = prompt('Enter ban reason:') || 'No reason provided'
-      if (!reason && reason !== 'No reason provided') return
-    }
-
-    if (!confirm(`Are you sure you want to ${action} this user?`)) return
-
-    setBanningUser(true)
-    try {
-      const user = auth.currentUser
-      if (!user) return
-
-      const token = await user.getIdToken()
-
-      const response = await fetch('/api/admin/ban-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ 
-          userId: uid, 
-          banned: !currentlyBanned,
-          reason 
-        }),
-      })
-
-      if (response.ok) {
-        await loadAdminData()
-        alert(`✅ User ${action}ned successfully`)
-      } else {
-        throw new Error('Ban request failed')
-      }
-    } catch (error) {
-      console.error(`Failed to ${action} user:`, error)
-      alert(`❌ Failed to ${action} user`)
-    } finally {
-      setBanningUser(false)
-    }
-  }
-
-  const handleViewUserDetails = async (uid: string) => {
-    try {
-      const user = auth.currentUser
-      if (!user) return
-
-      const token = await user.getIdToken()
-
-      const response = await fetch('/api/admin/user-details', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId: uid }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setSelectedUserDetails(data.user)
-        setShowUserDetailsModal(true)
-      } else {
-        throw new Error('Failed to fetch user details')
-      }
-    } catch (error) {
-      console.error('Failed to load user details:', error)
-      alert('❌ Failed to load user details')
-    }
-  }
-
-  const handleClearCache = async (address?: string) => {
-    const confirmMsg = address 
-      ? `Clear cache for ${address}?` 
-      : '⚠️ Clear ALL cache? This will affect performance temporarily.'
-    
-    if (!confirm(confirmMsg)) return
-
-    try {
-      const user = auth.currentUser
-      if (!user) return
-
-      const token = await user.getIdToken()
-
-      const response = await fetch('/api/admin/clear-cache', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ address }),
-      })
-
-      if (response.ok) {
-        await loadAdminData()
-        alert(address ? '✅ Token cache cleared' : '✅ All cache cleared')
-      }
-    } catch (error) {
-      console.error('Failed to clear cache:', error)
-    }
-  }
-
-  const handleTestAPI = async (apiName: string) => {
-    try {
-      const user = auth.currentUser
-      if (!user) return
-
-      const token = await user.getIdToken()
-
-      const response = await fetch('/api/admin/test-api', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ apiName }),
-      })
-
-      const data = await response.json()
       
       if (response.ok) {
-        alert(`✅ ${apiName} API Test\n\nStatus: ${data.status}\nResponse Time: ${data.responseTime}ms`)
-      } else {
-        alert(`❌ ${apiName} API Test Failed\n\n${data.error}`)
-      }
-      
-      await loadAPIStatuses()
-    } catch (error) {
-      alert(`❌ Failed to test ${apiName} API`)
-    }
-  }
-
-  const handleLogout = async () => {
-    await auth.signOut()
-    router.push('/admin/login')
-  }
-
-  const loadAutoPremiumSetting = async () => {
-    try {
-      const user = auth.currentUser
-      if (!user) return
-
-      const token = await user.getIdToken()
-      const response = await fetch('/api/admin/auto-premium', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      if (response.ok) {
         const data = await response.json()
-        setAutoPremiumEnabled(data.autoPremiumEnabled)
+        setAdminTotpEnabled(data.enabled || false)
       }
     } catch (error) {
-      console.error('Failed to load auto-premium setting:', error)
+      console.error('Failed to load TOTP status:', error)
     }
   }
 
-  const handleToggleAutoPremium = async () => {
-    setLoadingAutoPremium(true)
+  const loadActivityLogs = async () => {
+    setLogsLoading(true)
     try {
       const user = auth.currentUser
       if (!user) {
-        notifyError('Not authenticated')
+        console.error('[Logs] No authenticated user')
         return
       }
-
+      
+      console.log('[Logs] Loading activity logs...')
       const token = await user.getIdToken()
-      const newValue = !autoPremiumEnabled
-
-      const response = await fetch('/api/admin/auto-premium', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ enabled: newValue })
+      
+      const params = new URLSearchParams({ limit: '100' })
+      if (logsFilter) {
+        params.append('action', logsFilter)
+      }
+      
+      const response = await fetch(`/api/admin/activity-logs?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       })
-
+      
+      console.log('[Logs] Response status:', response.status)
+      
       if (response.ok) {
         const data = await response.json()
-        setAutoPremiumEnabled(data.autoPremiumEnabled)
-        notifySuccess(data.message)
+        console.log('[Logs] Loaded logs:', data.logs?.length || 0)
+        setActivityLogs(data.logs || [])
       } else {
         const error = await response.json()
-        notifyError(error.error || 'Failed to update setting')
+        console.error('[Logs] Failed to load:', error)
+        alert(`Failed to load logs: ${error.error || 'Unknown error'}`)
       }
     } catch (error) {
-      console.error('Failed to toggle auto-premium:', error)
-      notifyError('Failed to update auto-premium setting')
+      console.error('[Logs] Error loading activity logs:', error)
+      alert('Failed to load activity logs. Check console for details.')
     } finally {
-      setLoadingAutoPremium(false)
+      setLogsLoading(false)
     }
   }
 
-  const filteredUsers = users.filter(user => 
+  const updateSettings = async (updates: Partial<SystemSettings>) => {
+    try {
+      const user = auth.currentUser
+      if (!user) return
+      const token = await user.getIdToken()
+      
+      const response = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates)
+      })
+      
+      if (response.ok) {
+        setSystemSettings({ ...systemSettings, ...updates })
+      }
+    } catch (error) {
+      console.error('Failed to update settings:', error)
+    }
+  }
+
+  const setupAdminTotp = async () => {
+    try {
+      const user = auth.currentUser
+      if (!user) return
+      const token = await user.getIdToken()
+      
+      const response = await fetch('/api/admin/totp/setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setAdminTotpSecret(data.secret)
+        setAdminTotpQR(data.qrCode)
+        setShowTotpSetup(true)
+      }
+    } catch (error) {
+      console.error('Failed to setup TOTP:', error)
+    }
+  }
+
+  const verifyAdminTotp = async () => {
+    try {
+      const user = auth.currentUser
+      if (!user) return
+      const token = await user.getIdToken()
+      
+      const response = await fetch('/api/admin/totp/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          secret: adminTotpSecret,
+          token: totpVerifyCode
+        })
+      })
+      
+      if (response.ok) {
+        setAdminTotpEnabled(true)
+        setShowTotpSetup(false)
+        setTotpVerifyCode('')
+        alert('2FA enabled successfully!')
+      } else {
+        alert('Invalid verification code. Please try again.')
+      }
+    } catch (error) {
+      console.error('Failed to verify TOTP:', error)
+    }
+  }
+
+  const disableAdminTotp = async () => {
+    if (!confirm('Are you sure you want to disable 2FA for your admin account?')) return
+    
+    try {
+      const user = auth.currentUser
+      if (!user) return
+      const token = await user.getIdToken()
+      
+      const response = await fetch('/api/admin/totp/disable', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        setAdminTotpEnabled(false)
+        setAdminTotpSecret('')
+        setAdminTotpQR('')
+        alert('2FA disabled successfully!')
+      }
+    } catch (error) {
+      console.error('Failed to disable TOTP:', error)
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setTotpCopied(true)
+    setTimeout(() => setTotpCopied(false), 2000)
+  }
+
+  const handleViewUser = (user: User) => {
+    setSelectedUser(user)
+    setShowUserModal(true)
+  }
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user)
+    setEditingName(user.name || '')
+    setEditingEmail(user.email)
+    setEditingRole(user.role)
+    setEditingTier(user.tier)
+    setShowEditModal(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!selectedUser) return
+    
+    try {
+      const user = auth.currentUser
+      if (!user) return
+      const token = await user.getIdToken()
+      
+      // Update tier/plan
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'update_plan',
+          userId: selectedUser.uid,
+          plan: editingTier.toUpperCase()
+        })
+      })
+      
+      if (response.ok) {
+        setShowEditModal(false)
+        loadAdminData()
+      }
+    } catch (error) {
+      console.error('Failed to update user:', error)
+    }
+  }
+
+  const handleBanUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to ban this user?')) return
+    
+    try {
+      const user = auth.currentUser
+      if (!user) return
+      const token = await user.getIdToken()
+      
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'ban',
+          userId,
+          reason: 'Banned by admin'
+        })
+      })
+      
+      if (response.ok) {
+        loadAdminData()
+      }
+    } catch (error) {
+      console.error('Failed to ban user:', error)
+    }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to permanently delete this user? This cannot be undone.')) return
+    
+    try {
+      const user = auth.currentUser
+      if (!user) return
+      const token = await user.getIdToken()
+      
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          userId
+        })
+      })
+      
+      if (response.ok) {
+        loadAdminData()
+      }
+    } catch (error) {
+      console.error('Failed to delete user:', error)
+    }
+  }
+
+  const filteredUsers = users.filter(user =>
     user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.uid.toLowerCase().includes(searchQuery.toLowerCase())
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   if (roleLoading || loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <div className="text-white font-mono">LOADING ADMIN CONTROL PANEL...</div>
-        </div>
-      </div>
-    )
+    return <Loader fullScreen text="Loading admin panel" />
   }
 
   if (!isAdmin) return null
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* Background */}
-      <div className="fixed inset-0 stars-bg pointer-events-none opacity-30"></div>
-      <div className="fixed inset-0 grid-pattern pointer-events-none opacity-20"></div>
-
-      {/* Header */}
-      <header className="relative border-b border-white/20 bg-black/95 backdrop-blur-lg z-10 sticky top-0">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img 
-              src="/Tokenomicslab.ico" 
-              alt="Tokenomics Lab" 
-              className="w-10 h-10 object-contain transition-all duration-300 hover:scale-110 hover:brightness-110" 
-            />
-            <div>
-              <h1 className="text-xl font-bold text-white font-mono tracking-widest">
-                ADMIN CONTROL PANEL
-              </h1>
-              <p className="text-white/60 text-xs font-mono">SYSTEM ADMINISTRATOR • ALL ACCESS</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="text-right text-xs font-mono">
-              <div className="text-white/60">SYSTEM STATUS</div>
-              <div className="text-white flex items-center gap-1">
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                OPERATIONAL
-              </div>
-            </div>
-            <Link href="/dashboard">
-              <Button variant="outline" className="border-white/20 text-white hover:bg-white hover:text-black font-mono">
-                User View
-              </Button>
-            </Link>
-            <Button 
-              onClick={handleLogout}
-              className="bg-white text-black hover:bg-white/90 font-mono"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="relative max-w-7xl mx-auto px-4 py-8 z-10">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 hover:border-white/40 transition-all hover:shadow-lg hover:shadow-white/10">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/60 text-xs font-mono tracking-wider mb-1">TOTAL USERS</p>
-                <p className="text-4xl font-bold text-white font-mono tracking-wider">{stats.totalUsers}</p>
-                <p className="text-white/80 text-xs font-mono tracking-wider mt-1">▲ {stats.activeUsers24h} active (24h)</p>
-              </div>
-              <Users className="w-12 h-12 text-white/40" />
-            </div>
-          </div>
-
-          <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 hover:border-white/40 transition-all hover:shadow-lg hover:shadow-white/10">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/60 text-xs font-mono tracking-wider mb-1">PREMIUM USERS</p>
-                <p className="text-4xl font-bold text-white font-mono tracking-wider">{stats.premiumUsers}</p>
-                <p className="text-white/80 text-xs font-mono tracking-wider mt-1">
-                  {stats.totalUsers > 0 ? ((stats.premiumUsers / stats.totalUsers) * 100).toFixed(1) : 0}% conversion
-                </p>
-              </div>
-              <TrendingUp className="w-12 h-12 text-white/40" />
-            </div>
-          </div>
-
-          <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 hover:border-white/40 transition-all hover:shadow-lg hover:shadow-white/10">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/60 text-xs font-mono tracking-wider mb-1">CACHED TOKENS</p>
-                <p className="text-4xl font-bold text-white font-mono tracking-wider">{stats.cachedTokens}</p>
-                <p className="text-white/80 text-xs font-mono tracking-wider mt-1">{stats.totalQueries} total queries</p>
-              </div>
-              <Database className="w-12 h-12 text-white/40" />
-            </div>
-          </div>
-
-          <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 hover:border-white/40 transition-all hover:shadow-lg hover:shadow-white/10">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/60 text-xs font-mono tracking-wider mb-1">QUERIES (24H)</p>
-                <p className="text-4xl font-bold text-white font-mono tracking-wider">{stats.queriesLast24h}</p>
-                <p className="text-white/80 text-xs font-mono tracking-wider mt-1">
-                  {Math.round(stats.queriesLast24h / 24)}/hour avg
-                </p>
-              </div>
-              <Activity className="w-12 h-12 text-white/40" />
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {[
-            { id: 'users', icon: Users, label: 'USERS' },
-            { id: 'apis', icon: Server, label: 'API STATUS' },
-            { id: 'cache', icon: Database, label: 'CACHE' },
-            { id: 'system', icon: Activity, label: 'SYSTEM' },
-            { id: 'analytics', icon: BarChart3, label: 'ANALYTICS' },
-            { id: 'settings', icon: Settings, label: 'SETTINGS' },
-          ].map(tab => (
-            <Button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              variant={activeTab === tab.id ? 'default' : 'outline'}
-              className={`font-mono tracking-wider whitespace-nowrap transition-all ${
-                activeTab === tab.id 
-                  ? 'bg-white text-black hover:bg-white/90 border-2 border-white shadow-lg shadow-white/20' 
-                  : 'border-2 border-white/20 hover:border-white/40 hover:bg-white/10 backdrop-blur-md text-white'
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-black pt-20">
+        <div className="flex">
+          {/* Sidebar */}
+          <div className="w-16 fixed left-0 top-20 bottom-0 bg-black border-r border-white/10 flex flex-col items-center py-6 gap-4">
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`p-3 rounded-lg transition-all ${
+                activeTab === 'users'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
               }`}
+              title="Users"
             >
-              <tab.icon className="w-4 h-4 mr-2" />
-              {tab.label}
-            </Button>
-          ))}
-        </div>
+              <Users className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setActiveTab('cache')}
+              className={`p-3 rounded-lg transition-all ${
+                activeTab === 'cache'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
+              }`}
+              title="Cache"
+            >
+              <Database className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setActiveTab('system')}
+              className={`p-3 rounded-lg transition-all ${
+                activeTab === 'system'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
+              }`}
+              title="System"
+            >
+              <Activity className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`p-3 rounded-lg transition-all ${
+                activeTab === 'analytics'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
+              }`}
+              title="Analytics"
+            >
+              <TrendingUp className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`p-3 rounded-lg transition-all ${
+                activeTab === 'settings'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
+              }`}
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`p-3 rounded-lg transition-all ${
+                activeTab === 'logs'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
+              }`}
+              title="Activity Logs"
+            >
+              <Activity className="w-5 h-5" />
+            </button>
+          </div>
 
-        {/* User Management Tab */}
-        {activeTab === 'users' && (
-          <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white font-mono tracking-wider flex items-center gap-2">
-                <Users className="w-6 h-6" />
-                USER MANAGEMENT
-              </h2>
-              <div className="flex gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/60" />
-                  <Input
-                    type="text"
-                    placeholder="Search users..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-black/50 border-2 border-white/20 text-white font-mono tracking-wider w-64 focus:border-white/40 transition-all"
-                  />
+          {/* Main Content */}
+          <div className="flex-1 ml-16 p-8">
+            {/* Header */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <Shield className="w-6 h-6 text-white" />
+                    <h1 className="text-2xl font-bold text-white font-mono tracking-wider">
+                      Admin Control Panel
+                    </h1>
+                  </div>
+                  <p className="text-white/60 text-sm font-mono">SYSTEM ADMINISTRATOR • ALL ACCESS</p>
                 </div>
-                <Button onClick={loadAdminData} variant="outline" className="font-mono tracking-wider border-2 border-white/20 hover:border-white/40 hover:bg-white/10 backdrop-blur-md transition-all">
-                  <Activity className="w-4 h-4 mr-2" />
-                  Refresh
-                </Button>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                  <span className="text-green-500 text-xs font-mono font-bold">SYSTEM STATUS: OPERATIONAL</span>
+                </div>
+              </div>
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="bg-black border border-white/10 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-white/60 text-xs font-mono uppercase">Total Users</span>
+                    <Users className="w-5 h-5 text-white/40" />
+                  </div>
+                  <div className="text-3xl font-bold text-white font-mono">{stats.totalUsers}</div>
+                  <div className="text-green-500 text-xs font-mono mt-2">
+                    ↑ {stats.totalUsers > 0 ? '0 active (24h)' : '0 active'}
+                  </div>
+                </div>
+
+                <div className="bg-black border border-white/10 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-white/60 text-xs font-mono uppercase">Premium Users</span>
+                    <TrendingUp className="w-5 h-5 text-white/40" />
+                  </div>
+                  <div className="text-3xl font-bold text-white font-mono">{stats.premiumUsers}</div>
+                  <div className="text-white/50 text-xs font-mono mt-2">
+                    {stats.totalUsers > 0 ? `${((stats.premiumUsers / stats.totalUsers) * 100).toFixed(1)}% conversion` : '0% conversion'}
+                  </div>
+                </div>
+
+                <div className="bg-black border border-white/10 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-white/60 text-xs font-mono uppercase">Cached Tokens</span>
+                    <Database className="w-5 h-5 text-white/40" />
+                  </div>
+                  <div className="text-3xl font-bold text-white font-mono">{stats.cachedTokens}</div>
+                  <div className="text-white/50 text-xs font-mono mt-2">158 total queries</div>
+                </div>
+
+                <div className="bg-black border border-white/10 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-white/60 text-xs font-mono uppercase">Queries (24h)</span>
+                    <Activity className="w-5 h-5 text-white/40" />
+                  </div>
+                  <div className="text-3xl font-bold text-white font-mono">{stats.queries24h}</div>
+                  <div className="text-white/50 text-xs font-mono mt-2">0/hour avg</div>
+                </div>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b-2 border-white/20">
-                    <th className="text-left p-3 text-white/60 text-xs font-mono tracking-wider">NAME</th>
-                    <th className="text-left p-3 text-white/60 text-xs font-mono tracking-wider">EMAIL</th>
-                    <th className="text-left p-3 text-white/60 text-xs font-mono tracking-wider">UID</th>
-                    <th className="text-left p-3 text-white/60 text-xs font-mono tracking-wider">ROLE</th>
-                    <th className="text-left p-3 text-white/60 text-xs font-mono tracking-wider">TIER</th>
-                    <th className="text-left p-3 text-white/60 text-xs font-mono tracking-wider">LAST LOGIN</th>
-                    <th className="text-left p-3 text-white/60 text-xs font-mono tracking-wider">ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.uid} className="border-b border-white/10 hover:bg-white/5 backdrop-blur-sm transition-colors">
-                      <td className="p-3 text-white text-sm font-mono tracking-wider">{user.name || 'N/A'}</td>
-                      <td className="p-3 text-white text-sm font-mono tracking-wider">{user.email}</td>
-                      <td className="p-3 text-white/60 text-xs font-mono tracking-wider">
-                        {user.uid.slice(0, 12)}...
-                      </td>
-                      <td className="p-3">
-                        {editingUser === user.uid ? (
-                          <select
-                            value={selectedRole}
-                            onChange={(e) => setSelectedRole(e.target.value as any)}
-                            className="bg-black border-2 border-white/20 text-white text-sm p-2 rounded font-mono tracking-wider focus:border-white/40 transition-all"
-                          >
-                            <option value="FREE">FREE</option>
-                            <option value="PREMIUM">PREMIUM</option>
-                            <option value="ADMIN">ADMIN</option>
-                          </select>
-                        ) : (
-                          <span className={`px-3 py-1 text-xs font-mono tracking-wider rounded border-2 ${
-                            user.role === 'ADMIN' ? 'bg-red-500/20 text-red-400 border-red-500' :
-                            user.role === 'PREMIUM' ? 'bg-green-500/20 text-green-400 border-green-500' :
-                            'bg-gray-500/20 text-gray-400 border-gray-500'
-                          }`}>
-                            {user.role}
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span className={`px-2 py-1 text-xs font-mono tracking-wider rounded border ${
-                          user.tier === 'pro' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30'
-                        }`}>
-                          {user.tier}
-                        </span>
-                      </td>
-                      <td className="p-3 text-white/60 text-xs font-mono tracking-wider">
-                        {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex gap-2">
-                          {editingUser === user.uid ? (
-                            <>
-                              <Button
-                                size="sm"
-                                onClick={() => handleSetRole(user.uid, selectedRole)}
-                                className="bg-green-600 hover:bg-green-700 text-white font-mono tracking-wider border-2 border-green-500 shadow-lg shadow-green-500/30"
-                              >
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setEditingUser(null)}
-                                className="border-2 border-white/20 hover:border-white/40 hover:bg-white/10 backdrop-blur-md font-mono tracking-wider"
-                              >
-                                <XCircle className="w-3 h-3 mr-1" />
-                                Cancel
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleViewUserDetails(user.uid)}
-                                className="border-2 border-white/30 text-white hover:bg-white/10 hover:border-white/50 backdrop-blur-md transition-all"
+            {/* Tabs */}
+            <div className="flex items-center gap-2 mb-6 border-b border-white/10 pb-4">
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`px-4 py-2 rounded-lg font-mono text-xs transition-all ${
+                  activeTab === 'users'
+                    ? 'bg-white/10 text-white border border-white/20'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Users className="w-4 h-4 inline mr-2" />
+                USERS
+              </button>
+              <button
+                onClick={() => setActiveTab('cache')}
+                className={`px-4 py-2 rounded-lg font-mono text-xs transition-all ${
+                  activeTab === 'cache'
+                    ? 'bg-white/10 text-white border border-white/20'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Database className="w-4 h-4 inline mr-2" />
+                CACHE
+              </button>
+              <button
+                onClick={() => setActiveTab('system')}
+                className={`px-4 py-2 rounded-lg font-mono text-xs transition-all ${
+                  activeTab === 'system'
+                    ? 'bg-white/10 text-white border border-white/20'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Activity className="w-4 h-4 inline mr-2" />
+                SYSTEM
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-4 py-2 rounded-lg font-mono text-xs transition-all ${
+                  activeTab === 'analytics'
+                    ? 'bg-white/10 text-white border border-white/20'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4 inline mr-2" />
+                ANALYTICS
+              </button>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`px-4 py-2 rounded-lg font-mono text-xs transition-all ${
+                  activeTab === 'settings'
+                    ? 'bg-white/10 text-white border border-white/20'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Settings className="w-4 h-4 inline mr-2" />
+                SETTINGS
+              </button>
+              <button
+                onClick={() => setActiveTab('logs')}
+                className={`px-4 py-2 rounded-lg font-mono text-xs transition-all ${
+                  activeTab === 'logs'
+                    ? 'bg-white/10 text-white border border-white/20'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Activity className="w-4 h-4 inline mr-2" />
+                LOGS
+              </button>
+            </div>
+
+            {/* User Management Tab */}
+            {activeTab === 'users' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-bold text-white font-mono flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    User Management
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                      <input
+                        type="text"
+                        placeholder="Search users..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 pr-4 py-2 bg-black border border-white/20 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-white/40 w-64"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        setLoading(true)
+                        loadAdminData()
+                      }}
+                      disabled={loading}
+                      className="px-4 py-2 rounded-lg border border-white/20 text-white/70 hover:text-white hover:bg-white/5 transition-all text-sm font-mono flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                      REFRESH
+                    </button>
+                  </div>
+                </div>
+
+                {/* Users Table */}
+                <div className="bg-black border border-white/10 rounded-xl overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/10">
+                        <th className="text-left px-6 py-4 text-white/60 font-mono text-xs uppercase">Name</th>
+                        <th className="text-left px-6 py-4 text-white/60 font-mono text-xs uppercase">Email</th>
+                        <th className="text-left px-6 py-4 text-white/60 font-mono text-xs uppercase">UID</th>
+                        <th className="text-left px-6 py-4 text-white/60 font-mono text-xs uppercase">Role</th>
+                        <th className="text-left px-6 py-4 text-white/60 font-mono text-xs uppercase">Tier</th>
+                        <th className="text-left px-6 py-4 text-white/60 font-mono text-xs uppercase">Last Login</th>
+                        <th className="text-right px-6 py-4 text-white/60 font-mono text-xs uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((user) => (
+                        <tr key={user.uid} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-4 text-white font-mono text-sm">{user.name || 'N/A'}</td>
+                          <td className="px-6 py-4 text-white font-mono text-sm">{user.email}</td>
+                          <td className="px-6 py-4 text-white/60 font-mono text-xs">{user.uid.slice(0, 12)}...</td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 rounded text-xs font-mono font-bold ${
+                              user.role === 'admin' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/10 text-white/60'
+                            }`}>
+                              {user.role?.toUpperCase() || 'USER'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 rounded text-xs font-mono font-bold ${
+                              (user.tier === 'pro' || user.tier === 'PREMIUM' || user.plan === 'PREMIUM') ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/10 text-white/60'
+                            }`}>
+                              {(user.tier === 'pro' || user.tier === 'PREMIUM' || user.plan === 'PREMIUM') ? 'PREMIUM' : 'FREE'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-white/60 font-mono text-xs">
+                            {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleViewUser(user)}
+                                className="p-2 rounded-lg border border-white/20 hover:bg-white/5 transition-all"
                                 title="View Details"
                               >
-                                <Users className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setEditingUser(user.uid)
-                                  setSelectedRole(user.role as any)
-                                }}
-                                className="border-2 border-blue-500/50 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500 backdrop-blur-md transition-all"
-                                title="Edit Role"
+                                <Users className="w-4 h-4 text-white/60" />
+                              </button>
+                              <button
+                                onClick={() => handleEditUser(user)}
+                                className="p-2 rounded-lg border border-white/20 hover:bg-white/5 transition-all"
+                                title="Edit User"
                               >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className={`border-2 ${
-                                  user.banned 
-                                    ? 'border-green-500/50 text-green-400 hover:bg-green-500/20 hover:border-green-500' 
-                                    : 'border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20 hover:border-yellow-500'
-                                } backdrop-blur-md transition-all`}
-                                onClick={() => handleBanUser(user.uid, user.banned || false)}
-                                disabled={banningUser}
-                                title={user.banned ? 'Unban User' : 'Ban User'}
+                                <Edit className="w-4 h-4 text-white/60" />
+                              </button>
+                              <button
+                                onClick={() => handleBanUser(user.uid)}
+                                className="p-2 rounded-lg border border-white/20 hover:bg-white/5 transition-all"
+                                title="Ban User"
                               >
-                                {user.banned ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-2 border-red-500/50 text-red-400 hover:bg-red-500/20 hover:border-red-500 backdrop-blur-md transition-all"
+                                <Lock className="w-4 h-4 text-white/60" />
+                              </button>
+                              <button
                                 onClick={() => handleDeleteUser(user.uid)}
+                                className="p-2 rounded-lg border border-red-500/30 hover:bg-red-500/10 transition-all"
                                 title="Delete User"
                               >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              
-              {filteredUsers.length === 0 && (
-                <div className="text-center py-12">
-                  <Users className="w-16 h-16 text-white/20 mx-auto mb-4" />
-                  <p className="text-white/60 font-mono tracking-wider">No users found</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* API Status Tab */}
-        {activeTab === 'apis' && (
-          <div className="space-y-6">
-            <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 shadow-2xl">
-              <h2 className="text-2xl font-bold text-white font-mono tracking-wider mb-6 flex items-center gap-2">
-                <Server className="w-6 h-6" />
-                API STATUS MONITOR
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {apiStatuses.map((api) => (
-                  <div key={api.name} className={`p-4 border-2 backdrop-blur-md transition-all hover:shadow-lg ${
-                    api.status === 'operational' ? 'border-green-500/50 bg-green-500/10 hover:shadow-green-500/20' :
-                    api.status === 'degraded' ? 'border-yellow-500/50 bg-yellow-500/10 hover:shadow-yellow-500/20' :
-                    'border-red-500/50 bg-red-500/10 hover:shadow-red-500/20'
-                  }`}>
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-white font-mono tracking-wider font-bold text-lg">{api.name}</h3>
-                        <p className="text-white/60 text-xs font-mono tracking-wider">
-                          Last checked: {new Date(api.lastChecked).toLocaleTimeString()}
-                        </p>
-                      </div>
-                      <div className={`px-3 py-1 rounded text-xs font-mono tracking-wider flex items-center gap-2 border ${
-                        api.status === 'operational' ? 'bg-green-500/20 text-green-400 border-green-500/50' :
-                        api.status === 'degraded' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50' :
-                        'bg-red-500/20 text-red-400 border-red-500/50'
-                      }`}>
-                        {api.status === 'operational' && <CheckCircle className="w-3 h-3" />}
-                        {api.status === 'degraded' && <AlertTriangle className="w-3 h-3" />}
-                        {api.status === 'down' && <XCircle className="w-3 h-3" />}
-                        {api.status.toUpperCase()}
-                      </div>
+                                <Trash2 className="w-4 h-4 text-red-400" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {filteredUsers.length === 0 && (
+                    <div className="text-center py-12 text-white/40 font-mono text-sm">
+                      No users found
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4 mb-3">
-                      <div>
-                        <p className="text-white/60 text-xs font-mono tracking-wider mb-1">Response Time</p>
-                        <p className="text-white font-mono tracking-wider text-lg">{api.responseTime}ms</p>
-                      </div>
-                      <div>
-                        <p className="text-white/60 text-xs font-mono tracking-wider mb-1">Success Rate</p>
-                        <p className="text-white font-mono tracking-wider text-lg">{api.successRate}%</p>
-                      </div>
-                    </div>
-
-                    <div className="w-full bg-white/10 rounded-full h-2 mb-3">
-                      <div 
-                        className={`h-2 rounded-full ${
-                          api.successRate >= 95 ? 'bg-green-500' :
-                          api.successRate >= 80 ? 'bg-yellow-500' :
-                          'bg-red-500'
-                        }`}
-                        style={{ width: `${api.successRate}%` }}
-                      />
-                    </div>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleTestAPI(api.name)}
-                      className="w-full border-2 border-white/20 hover:border-white/40 hover:bg-white/10 backdrop-blur-md font-mono tracking-wider transition-all"
-                    >
-                      <Zap className="w-3 h-3 mr-2" />
-                      Test API
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* API Keys Management */}
-            <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 shadow-2xl">
-              <h2 className="text-2xl font-bold text-white font-mono tracking-wider mb-6 flex items-center gap-2">
-                <Key className="w-6 h-6" />
-                API KEYS STATUS
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.entries(apiKeys).map(([key, data]) => (
-                  <div key={key} className="p-4 bg-black/50 border-2 border-white/10 backdrop-blur-md hover:border-white/20 transition-all">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-white font-mono tracking-wider font-bold">{key}</h3>
-                      <div className={`w-3 h-3 rounded-full ${
-                        data.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-                      }`} />
-                    </div>
-                    <p className="text-white/60 text-xs font-mono tracking-wider">
-                      Status: <span className={data.status === 'active' ? 'text-green-400' : 'text-red-400'}>
-                        {data.status}
-                      </span>
-                    </p>
-                    <p className="text-white/60 text-xs font-mono tracking-wider">
-                      Last used: {data.lastUsed}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Cache Management Tab */}
-        {activeTab === 'cache' && (
-          <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white font-mono tracking-wider flex items-center gap-2">
-                <Database className="w-6 h-6" />
-                CACHE MANAGEMENT
-              </h2>
-              <Button
-                onClick={() => handleClearCache()}
-                className="bg-red-600 hover:bg-red-700 text-white font-mono tracking-wider border-2 border-red-500 shadow-lg shadow-red-500/30 transition-all"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Clear All Cache
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              {cachedTokens.map((token) => (
-                <div key={token.address} className="flex items-center justify-between p-4 bg-black/50 border-2 border-white/10 rounded backdrop-blur-md hover:border-white/30 hover:bg-black/60 transition-all">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                        <Code className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-white font-mono tracking-wider font-bold">{token.symbol || 'Unknown'}</p>
-                        <p className="text-white/60 text-xs font-mono tracking-wider">{token.name || 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right mr-6">
-                    <p className="text-white/60 text-xs font-mono tracking-wider">Address</p>
-                    <p className="text-white text-xs font-mono tracking-wider">{token.address.slice(0, 10)}...{token.address.slice(-8)}</p>
-                  </div>
-                  <div className="text-right mr-6">
-                    <p className="text-white/60 text-xs font-mono tracking-wider">Queries</p>
-                    <p className="text-green-400 text-lg font-mono tracking-wider font-bold">{token.queryCount}</p>
-                  </div>
-                  <div className="text-right mr-6">
-                    <p className="text-white/60 text-xs font-mono tracking-wider">Last Updated</p>
-                    <p className="text-white text-xs font-mono tracking-wider">
-                      {new Date(token.lastUpdated).toLocaleString()}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleClearCache(token.address)}
-                    className="border-2 border-red-500/50 text-red-400 hover:bg-red-500/20 hover:border-red-500 backdrop-blur-md transition-all"
-                  >
-                    <Trash2 className="w-3 h-3 mr-1" />
-                    Clear
-                  </Button>
-                </div>
-              ))}
-              {cachedTokens.length === 0 && (
-                <div className="text-center py-12">
-                  <Database className="w-16 h-16 text-white/20 mx-auto mb-4" />
-                  <p className="text-white/60 font-mono tracking-wider">No cached tokens</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* System Metrics Tab */}
-        {activeTab === 'system' && (
-          <div className="space-y-6">
-            <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 shadow-2xl">
-              <h2 className="text-2xl font-bold text-white font-mono tracking-wider mb-6 flex items-center gap-2">
-                <Activity className="w-6 h-6" />
-                SYSTEM METRICS
-              </h2>
-
-              {systemMetrics && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/60 font-mono tracking-wider text-sm">CPU Usage</p>
-                      <p className="text-white font-mono tracking-wider font-bold">{systemMetrics.cpuUsage}%</p>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 border border-white/20">
-                      <div 
-                        className={`h-3 rounded-full transition-all ${
-                          systemMetrics.cpuUsage < 50 ? 'bg-green-500' :
-                          systemMetrics.cpuUsage < 80 ? 'bg-yellow-500' :
-                          'bg-red-500'
-                        }`}
-                        style={{ width: `${systemMetrics.cpuUsage}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/60 font-mono tracking-wider text-sm">Memory Usage</p>
-                      <p className="text-white font-mono tracking-wider font-bold">{systemMetrics.memoryUsage}%</p>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 border border-white/20">
-                      <div 
-                        className={`h-3 rounded-full transition-all ${
-                          systemMetrics.memoryUsage < 50 ? 'bg-green-500' :
-                          systemMetrics.memoryUsage < 80 ? 'bg-yellow-500' :
-                          'bg-red-500'
-                        }`}
-                        style={{ width: `${systemMetrics.memoryUsage}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/60 font-mono tracking-wider text-sm">Error Rate</p>
-                      <p className="text-white font-mono tracking-wider font-bold">{systemMetrics.errorRate}%</p>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 border border-white/20">
-                      <div 
-                        className={`h-3 rounded-full transition-all ${
-                          systemMetrics.errorRate < 1 ? 'bg-green-500' :
-                          systemMetrics.errorRate < 5 ? 'bg-yellow-500' :
-                          'bg-red-500'
-                        }`}
-                        style={{ width: `${Math.min(systemMetrics.errorRate * 10, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                <div className="p-4 bg-blue-500/10 border-2 border-blue-500/30 backdrop-blur-md hover:border-blue-500/50 transition-all">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-blue-300 text-xs font-mono tracking-wider mb-1">Active Connections</p>
-                      <p className="text-3xl font-bold text-white font-mono tracking-wider">
-                        {systemMetrics?.activeConnections || 0}
-                      </p>
-                    </div>
-                    <Wifi className="w-10 h-10 text-blue-400 opacity-50" />
-                  </div>
-                </div>
-
-                <div className="p-4 bg-purple-500/10 border-2 border-purple-500/30 backdrop-blur-md hover:border-purple-500/50 transition-all">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-purple-300 text-xs font-mono tracking-wider mb-1">Requests/Minute</p>
-                      <p className="text-3xl font-bold text-white font-mono tracking-wider">
-                        {systemMetrics?.requestsPerMinute || 0}
-                      </p>
-                    </div>
-                    <Zap className="w-10 h-10 text-purple-400 opacity-50" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 shadow-2xl">
-              <h2 className="text-xl font-bold text-white font-mono tracking-wider mb-4 flex items-center gap-2">
-                <Globe className="w-5 h-5" />
-                SYSTEM HEALTH
-              </h2>
-              
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-green-500/20 border-2 border-green-500/50 rounded backdrop-blur-md hover:border-green-500 transition-all">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-green-400 font-mono tracking-wider text-sm">Database Connection</span>
-                  </div>
-                  <span className="text-green-400 font-mono tracking-wider text-xs">HEALTHY</span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-green-500/20 border-2 border-green-500/50 rounded backdrop-blur-md hover:border-green-500 transition-all">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-green-400 font-mono tracking-wider text-sm">Authentication Service</span>
-                  </div>
-                  <span className="text-green-400 font-mono tracking-wider text-xs">OPERATIONAL</span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-green-500/20 border-2 border-green-500/50 rounded backdrop-blur-md hover:border-green-500 transition-all">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-green-400 font-mono tracking-wider text-sm">Cache System</span>
-                  </div>
-                  <span className="text-green-400 font-mono tracking-wider text-xs">ACTIVE</span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-blue-500/20 border-2 border-blue-500/50 rounded backdrop-blur-md hover:border-blue-500 transition-all">
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-5 h-5 text-blue-400" />
-                    <span className="text-blue-400 font-mono tracking-wider text-sm">Uptime</span>
-                  </div>
-                  <span className="text-blue-400 font-mono tracking-wider text-xs">99.9%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Analytics Tab */}
-        {activeTab === 'analytics' && (
-          <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 shadow-2xl">
-            <h2 className="text-2xl font-bold text-white font-mono tracking-wider mb-6 flex items-center gap-2">
-              <BarChart3 className="w-6 h-6" />
-              ANALYTICS & INSIGHTS
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-white font-mono tracking-wider mb-4 text-lg">User Distribution</h3>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-sm text-white/60 font-mono tracking-wider mb-1">
-                      <span>FREE Users</span>
-                      <span>{stats.freeUsers} ({stats.totalUsers > 0 ? ((stats.freeUsers / stats.totalUsers) * 100).toFixed(1) : 0}%)</span>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 border border-white/20">
-                      <div 
-                        className="bg-gray-500 h-3 rounded-full transition-all" 
-                        style={{ width: `${stats.totalUsers > 0 ? (stats.freeUsers / stats.totalUsers) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-sm text-white/60 font-mono tracking-wider mb-1">
-                      <span>PREMIUM Users</span>
-                      <span>{stats.premiumUsers} ({stats.totalUsers > 0 ? ((stats.premiumUsers / stats.totalUsers) * 100).toFixed(1) : 0}%)</span>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 border border-white/20">
-                      <div 
-                        className="bg-green-500 h-3 rounded-full transition-all" 
-                        style={{ width: `${stats.totalUsers > 0 ? (stats.premiumUsers / stats.totalUsers) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-sm text-white/60 font-mono tracking-wider mb-1">
-                      <span>ADMIN Users</span>
-                      <span>{stats.adminUsers} ({stats.totalUsers > 0 ? ((stats.adminUsers / stats.totalUsers) * 100).toFixed(1) : 0}%)</span>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 border border-white/20">
-                      <div 
-                        className="bg-red-500 h-3 rounded-full transition-all" 
-                        style={{ width: `${stats.totalUsers > 0 ? (stats.adminUsers / stats.totalUsers) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-white font-mono tracking-wider mb-4 text-lg">Performance Metrics</h3>
-                <div className="space-y-3">
-                  <div className="p-4 bg-green-500/20 border-2 border-green-500/50 rounded backdrop-blur-md hover:border-green-500 transition-all">
-                    <p className="text-green-400 font-mono tracking-wider text-sm mb-1">Cache Hit Rate</p>
-                    <p className="text-3xl font-bold text-white font-mono tracking-wider">85.2%</p>
-                  </div>
-                  <div className="p-4 bg-blue-500/20 border-2 border-blue-500/50 rounded backdrop-blur-md hover:border-blue-500 transition-all">
-                    <p className="text-blue-400 font-mono tracking-wider text-sm mb-1">Avg Response Time</p>
-                    <p className="text-3xl font-bold text-white font-mono tracking-wider">142ms</p>
-                  </div>
-                  <div className="p-4 bg-purple-500/20 border-2 border-purple-500/50 rounded backdrop-blur-md hover:border-purple-500 transition-all">
-                    <p className="text-purple-400 font-mono tracking-wider text-sm mb-1">API Success Rate</p>
-                    <p className="text-3xl font-bold text-white font-mono tracking-wider">99.7%</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div className="bg-black/60 backdrop-blur-xl border-2 border-white/20 p-6 shadow-2xl">
-            <h2 className="text-2xl font-bold text-white font-mono tracking-wider mb-6 flex items-center gap-2">
-              <Settings className="w-6 h-6" />
-              SYSTEM SETTINGS
-            </h2>
-            
-            <div className="space-y-6">
-              {/* Auto-Premium Toggle */}
-              <div className="p-4 bg-purple-500/10 border-2 border-purple-500/30 rounded backdrop-blur-md hover:border-purple-500/50 transition-all">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-purple-400 font-mono tracking-wider font-bold">👑 AUTO-PREMIUM FOR NEW SIGNUPS</h3>
-                  <button
-                    onClick={handleToggleAutoPremium}
-                    disabled={loadingAutoPremium}
-                    className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black ${
-                      autoPremiumEnabled ? 'bg-purple-500' : 'bg-white/20'
-                    } ${loadingAutoPremium ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <span
-                      className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                        autoPremiumEnabled ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <p className="text-white/60 text-sm font-mono tracking-wider mb-3">
-                  {autoPremiumEnabled 
-                    ? '✅ ENABLED - All new signups automatically get PREMIUM tier' 
-                    : '❌ DISABLED - New signups get FREE tier (normal behavior)'}
-                </p>
-                <div className="flex items-center gap-2 text-xs font-mono tracking-wider">
-                  {autoPremiumEnabled ? (
-                    <span className="px-2 py-1 bg-purple-500/20 border border-purple-500/50 text-purple-300 rounded">
-                      STATUS: ACTIVE
-                    </span>
-                  ) : (
-                    <span className="px-2 py-1 bg-white/10 border border-white/30 text-white/60 rounded">
-                      STATUS: INACTIVE
-                    </span>
                   )}
                 </div>
               </div>
+            )}
 
-              {/* 2FA Security Section */}
-              <div className="p-4 bg-green-500/10 border-2 border-green-500/30 rounded backdrop-blur-md hover:border-green-500/50 transition-all">
-                <h3 className="text-green-400 font-mono tracking-wider font-bold mb-2">🔐 TWO-FACTOR AUTHENTICATION</h3>
-                <p className="text-white/60 text-sm font-mono tracking-wider mb-4">
-                  Protect your admin account with enterprise-grade 2FA security
-                </p>
-                <TwoFactorSetup />
-              </div>
-
-              <Link href="/admin/notification-settings">
-                <div className="p-4 bg-blue-500/10 border-2 border-blue-500/30 rounded backdrop-blur-md hover:border-blue-500/50 transition-all cursor-pointer group">
-                  <h3 className="text-blue-400 font-mono tracking-wider font-bold mb-2 group-hover:text-blue-300 transition-colors">🔔 NOTIFICATION SETTINGS</h3>
-                  <p className="text-white/60 text-sm font-mono tracking-wider mb-4">
-                    Configure email notifications, in-app alerts, and notification types
-                  </p>
-                  <div className="text-blue-400 font-mono text-xs tracking-wider group-hover:translate-x-1 transition-transform">
-                    CLICK TO CONFIGURE →
+            {/* Cache Tab */}
+            {activeTab === 'cache' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-bold text-white font-mono flex items-center gap-2">
+                    <Database className="w-5 h-5" />
+                    Cache Management
+                  </h2>
+                  <button
+                    onClick={async () => {
+                      if (confirm('Clear all cached tokens?')) {
+                        const user = auth.currentUser
+                        if (user) {
+                          const token = await user.getIdToken()
+                          await fetch('/api/admin/clear-cache', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                          })
+                          loadAdminData()
+                        }
+                      }
+                    }}
+                    className="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all text-sm font-mono flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    CLEAR CACHE
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <div className="text-white/60 text-xs font-mono uppercase mb-2">Cached Tokens</div>
+                    <div className="text-3xl font-bold text-white font-mono">{stats.cachedTokens}</div>
+                  </div>
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <div className="text-white/60 text-xs font-mono uppercase mb-2">Total Queries</div>
+                    <div className="text-3xl font-bold text-white font-mono">158</div>
+                  </div>
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <div className="text-white/60 text-xs font-mono uppercase mb-2">Cache Hit Rate</div>
+                    <div className="text-3xl font-bold text-white font-mono">87%</div>
                   </div>
                 </div>
-              </Link>
-
-              <div className="p-4 bg-yellow-500/10 border-2 border-yellow-500/30 rounded backdrop-blur-md hover:border-yellow-500/50 transition-all">
-                <h3 className="text-yellow-400 font-mono tracking-wider font-bold mb-2">⚠️ MAINTENANCE MODE</h3>
-                <p className="text-white/60 text-sm font-mono tracking-wider mb-4">
-                  Enable maintenance mode to prevent user access during updates
-                </p>
-                <Button variant="outline" className="border-2 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20 hover:border-yellow-500 backdrop-blur-md font-mono tracking-wider transition-all">
-                  Enable Maintenance Mode
-                </Button>
+                <div className="bg-black border border-white/10 rounded-xl p-6">
+                  <p className="text-white/60 font-mono text-sm">
+                    Cache stores frequently accessed token data to reduce API calls and improve performance.
+                    Cached data expires after 24 hours.
+                  </p>
+                </div>
               </div>
+            )}
 
-              <div className="p-4 bg-red-500/10 border-2 border-red-500/30 rounded backdrop-blur-md hover:border-red-500/50 transition-all">
-                <h3 className="text-red-400 font-mono tracking-wider font-bold mb-2">🗑️ DANGER ZONE</h3>
-                <p className="text-white/60 text-sm font-mono tracking-wider mb-4">
-                  Irreversible actions that affect the entire system
-                </p>
-                <div className="space-y-2">
-                  <Button variant="outline" className="w-full border-2 border-red-500/50 text-red-400 hover:bg-red-500/20 hover:border-red-500 backdrop-blur-md font-mono tracking-wider transition-all">
-                    Clear All User Data
-                  </Button>
-                  <Button variant="outline" className="w-full border-2 border-red-500/50 text-red-400 hover:bg-red-500/20 hover:border-red-500 backdrop-blur-md font-mono tracking-wider transition-all">
-                    Reset Rate Limits
-                  </Button>
-                  <Button variant="outline" className="w-full border-2 border-red-500/50 text-red-400 hover:bg-red-500/20 hover:border-red-500 backdrop-blur-md font-mono tracking-wider transition-all">
-                    Purge All Caches
-                  </Button>
+            {/* System Tab */}
+            {activeTab === 'system' && (
+              <div>
+                <h2 className="text-lg font-bold text-white font-mono flex items-center gap-2 mb-6">
+                  <Activity className="w-5 h-5" />
+                  System Status
+                </h2>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-white/60 text-xs font-mono uppercase">API Status</span>
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/80 font-mono text-sm">Mobula API</span>
+                        <span className="text-green-500 font-mono text-xs">OPERATIONAL</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/80 font-mono text-sm">Moralis API</span>
+                        <span className="text-green-500 font-mono text-xs">OPERATIONAL</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/80 font-mono text-sm">GoPlus API</span>
+                        <span className="text-green-500 font-mono text-xs">OPERATIONAL</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/80 font-mono text-sm">Helius API</span>
+                        <span className="text-green-500 font-mono text-xs">OPERATIONAL</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-white/60 text-xs font-mono uppercase">Database</span>
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/80 font-mono text-sm">Firebase Auth</span>
+                        <span className="text-green-500 font-mono text-xs">CONNECTED</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/80 font-mono text-sm">Firestore</span>
+                        <span className="text-green-500 font-mono text-xs">CONNECTED</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/80 font-mono text-sm">Storage</span>
+                        <span className="text-green-500 font-mono text-xs">CONNECTED</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Analytics Tab */}
+            {activeTab === 'analytics' && (
+              <div>
+                <h2 className="text-lg font-bold text-white font-mono flex items-center gap-2 mb-6">
+                  <TrendingUp className="w-5 h-5" />
+                  Analytics & Insights
+                </h2>
+                
+                {/* User Growth Chart */}
+                <div className="bg-black border border-white/10 rounded-xl p-6 mb-6">
+                  <h3 className="text-white font-mono text-sm mb-4">User Growth (Last 30 Days)</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={analyticsData?.userGrowthData || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                      <XAxis dataKey="date" stroke="#ffffff60" style={{ fontSize: '12px' }} />
+                      <YAxis stroke="#ffffff60" style={{ fontSize: '12px' }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#000', border: '1px solid #ffffff20', borderRadius: '8px' }}
+                        labelStyle={{ color: '#fff' }}
+                      />
+                      <Line type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981' }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Scan Activity Chart */}
+                <div className="bg-black border border-white/10 rounded-xl p-6 mb-6">
+                  <h3 className="text-white font-mono text-sm mb-4">Scan Activity (Last 7 Days)</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={analyticsData?.scanActivityData || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                      <XAxis dataKey="date" stroke="#ffffff60" style={{ fontSize: '12px' }} />
+                      <YAxis stroke="#ffffff60" style={{ fontSize: '12px' }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#000', border: '1px solid #ffffff20', borderRadius: '8px' }}
+                        labelStyle={{ color: '#fff' }}
+                      />
+                      <Bar dataKey="scans" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Tier Distribution */}
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <h3 className="text-white font-mono text-sm mb-4">User Tier Distribution</h3>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Free', value: analyticsData?.tierDistribution.free || 0, color: '#6b7280' },
+                            { name: 'Premium', value: analyticsData?.tierDistribution.premium || 0, color: '#10b981' },
+                            { name: 'Admin', value: analyticsData?.tierDistribution.admin || 0, color: '#ef4444' }
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {[
+                            { name: 'Free', value: analyticsData?.tierDistribution.free || 0, color: '#6b7280' },
+                            { name: 'Premium', value: analyticsData?.tierDistribution.premium || 0, color: '#10b981' },
+                            { name: 'Admin', value: analyticsData?.tierDistribution.admin || 0, color: '#ef4444' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#000', border: '1px solid #ffffff20', borderRadius: '8px' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Chain Usage */}
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <h3 className="text-white font-mono text-sm mb-4">Popular Chains</h3>
+                    <div className="space-y-4 mt-8">
+                      {(analyticsData?.chainUsage || []).map((chain) => (
+                        <div key={chain.chain} className="flex items-center justify-between">
+                          <span className="text-white/80 font-mono text-sm">{chain.chain}</span>
+                          <div className="flex items-center gap-3">
+                            <div className="w-32 h-2 bg-white/10 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full rounded-full" 
+                                style={{ 
+                                  width: `${chain.percentage}%`,
+                                  backgroundColor: chain.chain === 'Solana' ? '#9945FF' : chain.chain === 'Ethereum' ? '#627EEA' : '#F0B90B'
+                                }}
+                              ></div>
+                            </div>
+                            <span className="text-white/60 font-mono text-xs w-12 text-right">{chain.percentage}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Settings Tab */}
+            {activeTab === 'settings' && (
+              <div>
+                <h2 className="text-lg font-bold text-white font-mono flex items-center gap-2 mb-6">
+                  <Settings className="w-5 h-5" />
+                  System Settings
+                </h2>
+                <div className="space-y-4">
+                  {/* Admin 2FA Setup */}
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Smartphone className="w-5 h-5 text-white" />
+                          <h3 className="text-white font-mono text-sm">Admin 2FA (Your Account)</h3>
+                        </div>
+                        <p className="text-white/50 font-mono text-xs">Secure your admin account with two-factor authentication</p>
+                      </div>
+                      {adminTotpEnabled ? (
+                        <button
+                          onClick={disableAdminTotp}
+                          className="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all text-sm font-mono"
+                        >
+                          DISABLE 2FA
+                        </button>
+                      ) : (
+                        <button
+                          onClick={setupAdminTotp}
+                          className="px-4 py-2 rounded-lg border border-green-500/30 text-green-400 hover:bg-green-500/10 transition-all text-sm font-mono"
+                        >
+                          SETUP 2FA
+                        </button>
+                      )}
+                    </div>
+                    {adminTotpEnabled && (
+                      <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                          <span className="text-green-400 font-mono text-sm">2FA is enabled for your admin account</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Maintenance Mode */}
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Power className="w-5 h-5 text-white" />
+                          <h3 className="text-white font-mono text-sm">Maintenance Mode</h3>
+                        </div>
+                        <p className="text-white/50 font-mono text-xs">Temporarily disable the platform for maintenance</p>
+                      </div>
+                      <button
+                        onClick={() => updateSettings({ maintenanceMode: !systemSettings.maintenanceMode })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          systemSettings.maintenanceMode ? 'bg-red-500' : 'bg-white/20'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            systemSettings.maintenanceMode ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    {systemSettings.maintenanceMode && (
+                      <div className="mt-4">
+                        <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Maintenance Message</label>
+                        <textarea
+                          value={systemSettings.maintenanceMessage}
+                          onChange={(e) => setSystemSettings({ ...systemSettings, maintenanceMessage: e.target.value })}
+                          onBlur={() => updateSettings({ maintenanceMessage: systemSettings.maintenanceMessage })}
+                          className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white text-sm font-mono focus:outline-none focus:border-white/40 resize-none"
+                          rows={3}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* TOTP Configuration */}
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Key className="w-5 h-5 text-white" />
+                          <h3 className="text-white font-mono text-sm">Two-Factor Authentication (TOTP)</h3>
+                        </div>
+                        <p className="text-white/50 font-mono text-xs">Enable 2FA for enhanced security</p>
+                      </div>
+                      <button
+                        onClick={() => updateSettings({ totpEnabled: !systemSettings.totpEnabled })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          systemSettings.totpEnabled ? 'bg-green-500' : 'bg-white/20'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            systemSettings.totpEnabled ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    {systemSettings.totpEnabled && (
+                      <div className="mt-4 flex items-center justify-between">
+                        <span className="text-white/80 font-mono text-sm">Require TOTP for all users</span>
+                        <button
+                          onClick={() => updateSettings({ totpRequired: !systemSettings.totpRequired })}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            systemSettings.totpRequired ? 'bg-green-500' : 'bg-white/20'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              systemSettings.totpRequired ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* System Limits */}
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <h3 className="text-white font-mono text-sm mb-4">System Limits</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Free Tier Daily Limit</label>
+                        <input
+                          type="number"
+                          value={systemSettings.freeTierLimit}
+                          onChange={(e) => setSystemSettings({ ...systemSettings, freeTierLimit: parseInt(e.target.value) })}
+                          onBlur={() => updateSettings({ freeTierLimit: systemSettings.freeTierLimit })}
+                          className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-white/40"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Cache Expiration (hours)</label>
+                        <input
+                          type="number"
+                          value={systemSettings.cacheExpiration}
+                          onChange={(e) => setSystemSettings({ ...systemSettings, cacheExpiration: parseInt(e.target.value) })}
+                          onBlur={() => updateSettings({ cacheExpiration: systemSettings.cacheExpiration })}
+                          className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-white/40"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* API Configuration */}
+                  <div className="bg-black border border-white/10 rounded-xl p-6">
+                    <h3 className="text-white font-mono text-sm mb-4">API Configuration</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-white font-mono text-sm">Mobula API</div>
+                          <div className="text-white/50 font-mono text-xs">Market data provider</div>
+                        </div>
+                        <span className="text-green-500 font-mono text-xs">CONFIGURED</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-white font-mono text-sm">Moralis API</div>
+                          <div className="text-white/50 font-mono text-xs">Blockchain data provider</div>
+                        </div>
+                        <span className="text-green-500 font-mono text-xs">CONFIGURED</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-white font-mono text-sm">Helius API</div>
+                          <div className="text-white/50 font-mono text-xs">Solana data provider</div>
+                        </div>
+                        <span className="text-green-500 font-mono text-xs">CONFIGURED</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Activity Logs Tab */}
+            {activeTab === 'logs' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-bold text-white font-mono flex items-center gap-2">
+                    <Activity className="w-5 h-5" />
+                    ACTIVITY LOGS
+                  </h2>
+                  <button
+                    onClick={loadActivityLogs}
+                    disabled={logsLoading}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white font-mono text-xs transition-all"
+                  >
+                    <RefreshCw className={`w-4 h-4 inline mr-2 ${logsLoading ? 'animate-spin' : ''}`} />
+                    REFRESH
+                  </button>
+                </div>
+
+                {/* Filter */}
+                <div className="mb-6">
+                  <select
+                    value={logsFilter}
+                    onChange={(e) => setLogsFilter(e.target.value)}
+                    className="bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono text-sm focus:outline-none focus:border-white/40"
+                  >
+                    <option value="">All Activities</option>
+                    <option value="user_login">User Login</option>
+                    <option value="user_logout">User Logout</option>
+                    <option value="user_signup">User Signup</option>
+                    <option value="token_scan">Token Scan</option>
+                    <option value="watchlist_add">Watchlist Add</option>
+                    <option value="watchlist_remove">Watchlist Remove</option>
+                    <option value="tier_upgrade">Tier Upgrade</option>
+                    <option value="tier_downgrade">Tier Downgrade</option>
+                    <option value="profile_update">Profile Update</option>
+                    <option value="2fa_enabled">2FA Enabled</option>
+                    <option value="2fa_disabled">2FA Disabled</option>
+                  </select>
+                </div>
+
+                {/* Logs Table */}
+                {logsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader size="md" />
+                  </div>
+                ) : activityLogs.length === 0 ? (
+                  <div className="text-center py-12 text-white/40 font-mono text-sm">
+                    No activity logs found
+                  </div>
+                ) : (
+                  <div className="bg-black border border-white/10 rounded-xl overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-white/5 border-b border-white/10">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-white/60 font-mono text-xs uppercase">Timestamp</th>
+                            <th className="px-4 py-3 text-left text-white/60 font-mono text-xs uppercase">User</th>
+                            <th className="px-4 py-3 text-left text-white/60 font-mono text-xs uppercase">Action</th>
+                            <th className="px-4 py-3 text-left text-white/60 font-mono text-xs uppercase">Details</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/10">
+                          {activityLogs.map((log) => (
+                            <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                              <td className="px-4 py-3 text-white/80 font-mono text-xs whitespace-nowrap">
+                                {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 text-white/80 font-mono text-xs">
+                                <div>{log.userEmail}</div>
+                                <div className="text-white/40 text-[10px]">{log.userId.slice(0, 8)}...</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-block px-2 py-1 rounded text-[10px] font-mono uppercase ${
+                                  log.action.includes('login') || log.action.includes('signup') ? 'bg-green-500/20 text-green-400' :
+                                  log.action.includes('logout') ? 'bg-gray-500/20 text-gray-400' :
+                                  log.action.includes('scan') ? 'bg-blue-500/20 text-blue-400' :
+                                  log.action.includes('upgrade') ? 'bg-purple-500/20 text-purple-400' :
+                                  log.action.includes('downgrade') ? 'bg-orange-500/20 text-orange-400' :
+                                  log.action.includes('delete') ? 'bg-red-500/20 text-red-400' :
+                                  'bg-white/10 text-white/60'
+                                }`}>
+                                  {log.action.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-white/60 font-mono text-xs">
+                                {log.details}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* User Details Modal */}
+        {showUserModal && selectedUser && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowUserModal(false)}>
+            <div className="bg-black border border-white/20 rounded-xl p-6 max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white font-mono">User Details</h3>
+                <button onClick={() => setShowUserModal(false)} className="text-white/60 hover:text-white">
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-white/60 text-xs font-mono uppercase">Name</label>
+                    <div className="text-white font-mono">{selectedUser.name || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="text-white/60 text-xs font-mono uppercase">Email</label>
+                    <div className="text-white font-mono">{selectedUser.email}</div>
+                  </div>
+                  <div>
+                    <label className="text-white/60 text-xs font-mono uppercase">UID</label>
+                    <div className="text-white font-mono text-xs">{selectedUser.uid}</div>
+                  </div>
+                  <div>
+                    <label className="text-white/60 text-xs font-mono uppercase">Role</label>
+                    <div className="text-white font-mono">{selectedUser.role}</div>
+                  </div>
+                  <div>
+                    <label className="text-white/60 text-xs font-mono uppercase">Tier</label>
+                    <div className="text-white font-mono">{selectedUser.tier || selectedUser.plan || 'FREE'}</div>
+                  </div>
+                  <div>
+                    <label className="text-white/60 text-xs font-mono uppercase">Last Login</label>
+                    <div className="text-white font-mono text-sm">{selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleString() : 'Never'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TOTP Setup Modal */}
+        {showTotpSetup && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowTotpSetup(false)}>
+            <div className="bg-black border border-white/20 rounded-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white font-mono">Setup 2FA</h3>
+                <button onClick={() => setShowTotpSetup(false)} className="text-white/60 hover:text-white">
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="text-white/80 font-mono text-sm">
+                  <p className="mb-4">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
+                  {adminTotpQR && (
+                    <div className="flex justify-center mb-4">
+                      <img src={adminTotpQR} alt="QR Code" className="w-48 h-48 border border-white/20 rounded-lg" />
+                    </div>
+                  )}
+                  <div className="mb-4">
+                    <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Or enter this secret manually:</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={adminTotpSecret}
+                        readOnly
+                        className="flex-1 bg-black border border-white/20 rounded-lg px-4 py-2 text-white text-sm font-mono focus:outline-none"
+                      />
+                      <button
+                        onClick={() => copyToClipboard(adminTotpSecret)}
+                        className="p-2 rounded-lg border border-white/20 hover:bg-white/5 transition-all"
+                        title="Copy to clipboard"
+                      >
+                        {totpCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-white/60" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Enter verification code:</label>
+                    <input
+                      type="text"
+                      value={totpVerifyCode}
+                      onChange={(e) => setTotpVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white text-center text-2xl font-mono tracking-widest focus:outline-none focus:border-white/40"
+                      maxLength={6}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={verifyAdminTotp}
+                    disabled={totpVerifyCode.length !== 6}
+                    className="flex-1 px-4 py-2 bg-white text-black rounded-lg font-mono text-sm hover:bg-white/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    VERIFY & ENABLE
+                  </button>
+                  <button
+                    onClick={() => setShowTotpSetup(false)}
+                    className="flex-1 px-4 py-2 border border-white/20 text-white rounded-lg font-mono text-sm hover:bg-white/5 transition-all"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit User Modal */}
+        {showEditModal && selectedUser && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowEditModal(false)}>
+            <div className="bg-black border border-white/20 rounded-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white font-mono">Edit User</h3>
+                <button onClick={() => setShowEditModal(false)} className="text-white/60 hover:text-white">
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Name</label>
+                  <input
+                    type="text"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-white/40"
+                    placeholder="User name"
+                  />
+                </div>
+                <div>
+                  <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Email</label>
+                  <input
+                    type="email"
+                    value={editingEmail}
+                    onChange={(e) => setEditingEmail(e.target.value)}
+                    className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-white/40"
+                    placeholder="user@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Role</label>
+                  <select
+                    value={editingRole}
+                    onChange={(e) => setEditingRole(e.target.value)}
+                    className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-white/40"
+                  >
+                    <option value="free">USER</option>
+                    <option value="admin">ADMIN</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-white/60 text-xs font-mono uppercase mb-2 block">Tier</label>
+                  <select
+                    value={editingTier}
+                    onChange={(e) => setEditingTier(e.target.value)}
+                    className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-white/40"
+                  >
+                    <option value="free">FREE</option>
+                    <option value="pro">PREMIUM</option>
+                  </select>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleSaveEdit}
+                    className="flex-1 px-4 py-2 bg-white text-black rounded-lg font-mono text-sm hover:bg-white/90 transition-all"
+                  >
+                    SAVE CHANGES
+                  </button>
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="flex-1 px-4 py-2 border border-white/20 text-white rounded-lg font-mono text-sm hover:bg-white/5 transition-all"
+                  >
+                    CANCEL
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* User Details Modal */}
-      {showUserDetailsModal && selectedUserDetails && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowUserDetailsModal(false)}>
-          <div className="bg-black border-2 border-white/20 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white font-mono tracking-wider">USER DETAILS</h2>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowUserDetailsModal(false)}
-                className="border-2 border-white/20 hover:border-white/40"
-              >
-                <XCircle className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Basic Info */}
-              <div className="bg-white/5 border border-white/10 rounded p-4">
-                <h3 className="text-white font-mono tracking-wider font-bold mb-3">BASIC INFORMATION</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-white/60 font-mono">Email</p>
-                    <p className="text-white font-mono">{selectedUserDetails.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/60 font-mono">UID</p>
-                    <p className="text-white font-mono text-xs">{selectedUserDetails.uid}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/60 font-mono">Role</p>
-                    <p className="text-white font-mono">{selectedUserDetails.role || selectedUserDetails.plan}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/60 font-mono">Tier</p>
-                    <p className="text-white font-mono">{selectedUserDetails.tier}</p>
-                  </div>
-                  {selectedUserDetails.banned && (
-                    <>
-                      <div className="col-span-2">
-                        <p className="text-red-400 font-mono font-bold">⚠️ USER IS BANNED</p>
-                        <p className="text-white/60 font-mono text-xs">Reason: {selectedUserDetails.banReason}</p>
-                        <p className="text-white/60 font-mono text-xs">Banned At: {new Date(selectedUserDetails.bannedAt).toLocaleString()}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Usage Stats */}
-              <div className="bg-white/5 border border-white/10 rounded p-4">
-                <h3 className="text-white font-mono tracking-wider font-bold mb-3">USAGE STATISTICS</h3>
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <p className="text-white/60 font-mono">Tokens Analyzed</p>
-                    <p className="text-white font-mono text-lg">{selectedUserDetails.dailyAnalyses || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/60 font-mono">Watchlist</p>
-                    <p className="text-white font-mono text-lg">{selectedUserDetails.watchlistCount || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/60 font-mono">Active Alerts</p>
-                    <p className="text-white font-mono text-lg">{selectedUserDetails.activeAlertsCount || 0}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Auth Data */}
-              {selectedUserDetails.authData && (
-                <div className="bg-white/5 border border-white/10 rounded p-4">
-                  <h3 className="text-white font-mono tracking-wider font-bold mb-3">AUTHENTICATION</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-white/60 font-mono">Email Verified</span>
-                      <span className={`font-mono ${selectedUserDetails.authData.emailVerified ? 'text-green-400' : 'text-red-400'}`}>
-                        {selectedUserDetails.authData.emailVerified ? '✓ Yes' : '✗ No'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60 font-mono">Account Disabled</span>
-                      <span className={`font-mono ${selectedUserDetails.authData.disabled ? 'text-red-400' : 'text-green-400'}`}>
-                        {selectedUserDetails.authData.disabled ? '✓ Yes' : '✗ No'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60 font-mono">Sign-In Provider</span>
-                      <span className="text-white font-mono">
-                        {selectedUserDetails.authData.providerData?.[0]?.providerId || 'Unknown'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60 font-mono">Created</span>
-                      <span className="text-white font-mono text-xs">
-                        {selectedUserDetails.authData.metadata?.creationTime || 'Unknown'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60 font-mono">Last Sign In</span>
-                      <span className="text-white font-mono text-xs">
-                        {selectedUserDetails.authData.metadata?.lastSignInTime || 'Unknown'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Recent Scans */}
-              {selectedUserDetails.recentScans && selectedUserDetails.recentScans.length > 0 && (
-                <div className="bg-white/5 border border-white/10 rounded p-4">
-                  <h3 className="text-white font-mono tracking-wider font-bold mb-3">RECENT SCANS</h3>
-                  <div className="space-y-2">
-                    {selectedUserDetails.recentScans.slice(0, 5).map((scan: any, idx: number) => (
-                      <div key={idx} className="flex justify-between text-xs border-b border-white/5 pb-2">
-                        <span className="text-white font-mono">{scan.tokenSymbol || scan.tokenAddress?.slice(0, 8)}</span>
-                        <span className="text-white/60 font-mono">{new Date(scan.scannedAt).toLocaleDateString()}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   )
 }

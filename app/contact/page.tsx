@@ -2,7 +2,8 @@
 
 import React from 'react'
 import { useForm, ValidationError } from '@formspree/react'
-import { ChevronRight, Mail, Clock, CheckCircle, ArrowLeft, Shield } from 'lucide-react'
+import { ChevronRight, Mail, Clock, CheckCircle, ArrowLeft } from 'lucide-react'
+import Navbar from '@/components/navbar'
 
 function ContactForm() {
   const [state, handleSubmit] = useForm('meovqnpq')
@@ -35,24 +36,9 @@ function ContactForm() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Navigation */}
-      <nav className="border-b border-white/10 bg-black/40 backdrop-blur-xl sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2 font-mono text-lg font-bold tracking-wider hover:text-white/80 transition-colors">
-            <Shield className="w-5 h-5" />
-            TOKENOMICS LAB
-          </a>
-          <a 
-            href="/"
-            className="flex items-center gap-2 px-4 py-2 text-xs font-mono tracking-wider border border-white/20 hover:border-white/40 hover:bg-white/10 transition-all"
-          >
-            <ArrowLeft className="w-3 h-3" />
-            BACK
-          </a>
-        </div>
-      </nav>
-
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-black text-white pt-20">
       {/* Main Content */}
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {/* Header */}
@@ -198,7 +184,8 @@ function ContactForm() {
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 

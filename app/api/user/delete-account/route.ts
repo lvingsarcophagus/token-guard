@@ -3,119 +3,85 @@ import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin'
 
 export async function DELETE(request: NextRequest) {
   try {
-    const auth = getAdminAuth()
-    const db = getAdminDb()
-    
-    // Verify user authentication
-    const authHeader = request.headers.get('authorization')
+    const authHeader = request.headers.get('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized - No token provided' }, { status: 401 })
+    }
+
+    const token = authHeader.split('Bearer ')[1]
+    const adminAuth = getAdminAuth()
+    const adminDb = getAdminDb()
+    
+    let decodedToken
+    try {
+      decodedToken = await adminAuth.verifyIdToken(token)
+    } catch (verifyError) {
+      console.error('[Delete Account] Token verification failed:', verifyError)
+      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
     }
     
-    const token = authHeader.split('Bearer ')[1]
-    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
-    
-    console.log('[GDPR Deletion] Starting account deletion for user:', userId)
-    
-    // 1. Delete Firestore data
-    const batch = db.batch()
-    
-    // Delete main user document
-    batch.delete(db.collection('users').doc(userId))
-    
-    // Delete analysis history subcollection
-    const analysisHistorySnapshot = await db
-      .collection('users')
-      .doc(userId)
-      .collection('analysisHistory')
-      .get()
-    
-    analysisHistorySnapshot.docs.forEach(doc => {
-      batch.delete(doc.ref)
-    })
-    
-    // Delete watchlist collection
-    const watchlistSnapshot = await db
-      .collection('watchlist')
-      .doc(userId)
-      .collection('tokens')
-      .get()
-    
-    watchlistSnapshot.docs.forEach(doc => {
-      batch.delete(doc.ref)
-    })
-    
-    // Delete watchlist parent document
-    batch.delete(db.collection('watchlist').doc(userId))
-    
-    // Delete alerts collection
-    const alertsSnapshot = await db
-      .collection('alerts')
-      .doc(userId)
-      .collection('notifications')
-      .get()
-    
-    alertsSnapshot.docs.forEach(doc => {
-      batch.delete(doc.ref)
-    })
-    
-    // Delete alerts parent document
-    batch.delete(db.collection('alerts').doc(userId))
-    
-    // Delete portfolio data if exists
-    const portfolioSnapshot = await db
-      .collection('portfolios')
-      .where('userId', '==', userId)
-      .get()
-    
-    portfolioSnapshot.docs.forEach(doc => {
-      batch.delete(doc.ref)
-    })
-    
-    await batch.commit()
-    
-    console.log('[GDPR Deletion] Firestore data deleted for user:', userId)
-    
-    // 2. Log deletion for compliance audit trail
-    await db.collection('deletionLogs').add({
-      userId: userId,
-      email: decodedToken.email,
-      deletedAt: new Date(),
-      reason: 'User requested account deletion (GDPR Article 17)',
-      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
-      userAgent: request.headers.get('user-agent') || 'unknown',
-    })
-    
-    console.log('[GDPR Deletion] Deletion logged for audit trail')
-    
-    // 3. Delete from Firebase Authentication (this will also sign out the user)
-    await auth.deleteUser(userId)
-    
-    console.log('[GDPR Deletion] Firebase Auth user deleted:', userId)
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Account permanently deleted in compliance with GDPR Article 17',
-      deletedAt: new Date().toISOString(),
-      dataRemoved: {
-        userProfile: true,
-        analysisHistory: true,
-        watchlist: true,
-        alerts: true,
-        portfolio: true,
-        authentication: true,
+
+    console.log(`[Delete Account] Deleting user: ${userId}`)
+
+    // Delete user subcollections in batches (Firestore has 500 operation limit per batch)
+    const deleteInBatches = async (collectionPath: string) => {
+      const snapshot = await adminDb.collection(collectionPath).get()
+      if (snapshot.empty) return
+      
+      const batches = []
+      let batch = adminDb.batch()
+      let operationCount = 0
+      
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref)
+        operationCount++
+        
+        if (operationCount === 500) {
+          batches.push(batch.commit())
+          batch = adminDb.batch()
+          operationCount = 0
+        }
+      })
+      
+      if (operationCount > 0) {
+        batches.push(batch.commit())
       }
-    })
-    
-  } catch (error) {
-    console.error('[GDPR Deletion] Error:', error)
-    return NextResponse.json(
-      { 
-        error: 'Failed to delete account',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    )
+      
+      await Promise.all(batches)
+    }
+
+    // Delete watchlist
+    await deleteInBatches(`watchlist/${userId}/tokens`)
+
+    // Delete analysis history
+    await deleteInBatches(`analysis_history/${userId}/scans`)
+
+    // Delete alerts
+    await deleteInBatches(`alerts/${userId}/notifications`)
+
+    // Delete single documents
+    const singleDocDeletes = [
+      adminDb.collection('portfolio').doc(userId).delete(),
+      adminDb.collection('settings').doc(userId).delete(),
+      adminDb.collection('totp_secrets').doc(userId).delete(),
+      adminDb.collection('admin_notification_preferences').doc(userId).delete(),
+      adminDb.collection('users').doc(userId).delete()
+    ]
+
+    await Promise.all(singleDocDeletes)
+
+    // Delete from Firebase Auth
+    await adminAuth.deleteUser(userId)
+
+    console.log(`[Delete Account] User deleted successfully: ${userId}`)
+
+    return NextResponse.json({ success: true, message: 'Account deleted successfully' })
+  } catch (error: any) {
+    console.error('[Delete Account] Error:', error)
+    return NextResponse.json({ 
+      error: 'Failed to delete account', 
+      details: error?.message || 'Unknown error' 
+    }, { status: 500 })
   }
 }

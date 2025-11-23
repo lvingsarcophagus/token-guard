@@ -13,7 +13,7 @@ import { MorphingSquare } from '@/components/ui/morphing-square'
 export default function PremiumPage() {
   const router = useRouter()
   const { user, userProfile, loading } = useAuth()
-  
+
   useEffect(() => {
     if (!loading) {
       if (!user || userProfile?.plan !== 'PREMIUM') {
@@ -23,10 +23,10 @@ export default function PremiumPage() {
       }
     }
   }, [user, userProfile, loading, router])
-  
+
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">
-      <MorphingSquare 
+      <MorphingSquare
         message="Redirecting to premium dashboard..."
         messagePlacement="bottom"
       />

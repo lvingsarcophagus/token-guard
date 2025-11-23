@@ -2,11 +2,11 @@
 
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
-import { Shield, BarChart3, Search, Eye, Activity, Database, Globe, CheckCircle, ArrowRight, AlertTriangle, Menu, X, Cpu, Zap, Bell, Layers, GitBranch, Sparkles, Binary, Hexagon, Box } from "lucide-react"
+import { Shield, BarChart3, Search, Eye, Activity, Database, Globe, CheckCircle, ArrowRight, AlertTriangle, Cpu, Zap, Bell, Layers, GitBranch, Sparkles, Binary, Hexagon, Box } from "lucide-react"
 import dynamic from "next/dynamic"
-import { Suspense, useState } from "react"
-import { Button } from "@/components/ui/button"
+import { Suspense } from "react"
 import { GlowingEffect } from "@/components/ui/glowing-effect"
+import Navbar from "@/components/navbar"
 
 // Dynamically import the 3D scene to avoid SSR issues
 const GenerativeArtScene = dynamic(
@@ -15,114 +15,28 @@ const GenerativeArtScene = dynamic(
 )
 
 export default function LandingPage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  
   return (
     <div className="relative min-h-screen overflow-hidden bg-black">
-      {/* Landing Page Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10 shadow-2xl">
-        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.05] via-transparent to-transparent pointer-events-none"></div>
-        
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
-          <div className="flex items-center justify-between h-12 sm:h-14">
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
-              <img 
-                src="/Tokenomicslab.ico" 
-                alt="Tokenomics Lab" 
-                className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 object-contain transition-all duration-300 group-hover:scale-110 group-hover:brightness-110 group-hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] group-hover:rotate-[5deg]" 
-              />
-              <div className="hidden sm:block">
-                <span className="text-sm sm:text-base lg:text-lg font-bold text-white font-mono tracking-widest group-hover:text-white/90 transition-colors drop-shadow-lg">
-                  TOKENOMICS LAB
-                </span>
-                <div className="text-[7px] sm:text-[8px] text-white/60 font-mono -mt-0.5 tracking-wider group-hover:text-white/80 transition-colors">ANALYTICS.PLATFORM</div>
-              </div>
-            </Link>
-
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-2">
-              <Link href="/docs">
-                <Button variant="ghost" className="text-white/60 hover:text-white hover:bg-white/10 border border-white/20 text-xs font-mono px-3 py-1.5 h-8">
-                  DOCS
-                </Button>
-              </Link>
-              <Link href="/pricing">
-                <Button variant="ghost" className="text-white/60 hover:text-white hover:bg-white/10 border border-white/20 text-xs font-mono px-3 py-1.5 h-8">
-                  PRICING
-                </Button>
-              </Link>
-              <Link href="/login">
-                <Button variant="ghost" className="text-white/60 hover:text-white hover:bg-white/10 border border-white/20 text-xs font-mono px-3 py-1.5 h-8">
-                  LOGIN
-                </Button>
-              </Link>
-              <Link href="/signup">
-                <Button className="bg-transparent border border-white text-white hover:bg-white hover:text-black text-xs font-mono px-3 py-1.5 h-8 transition-all">
-                  SIGN UP
-                </Button>
-              </Link>
-            </div>
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 border-2 border-white/20 hover:border-white/40 hover:bg-white/10 backdrop-blur-md transition-all duration-300 group hover:shadow-lg hover:shadow-white/5 h-9 w-9 flex items-center justify-center"
-            >
-              {mobileMenuOpen ? 
-                <X className="w-4 h-4 text-white group-hover:rotate-90 transition-transform duration-300" /> : 
-                <Menu className="w-4 h-4 text-white group-hover:scale-110 transition-transform duration-300" />
-              }
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-white/20 bg-black/40 backdrop-blur-xl animate-in slide-in-from-top-2">
-            <div className="px-3 py-4 space-y-2">
-              <Link href="/docs" onClick={() => setMobileMenuOpen(false)}>
-                <button className="w-full text-left px-3 py-2.5 border-2 border-white/20 hover:border-white/30 hover:bg-white/10 backdrop-blur-md text-white/60 hover:text-white transition-all duration-300 font-mono text-[10px]">
-                  DOCS
-                </button>
-              </Link>
-              <Link href="/pricing" onClick={() => setMobileMenuOpen(false)}>
-                <button className="w-full text-left px-3 py-2.5 border-2 border-white/20 hover:border-white/30 hover:bg-white/10 backdrop-blur-md text-white/60 hover:text-white transition-all duration-300 font-mono text-[10px]">
-                  PRICING
-                </button>
-              </Link>
-              <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
-                <button className="w-full text-left px-3 py-2.5 border-2 border-white/20 hover:border-white/30 hover:bg-white/10 backdrop-blur-md text-white/60 hover:text-white transition-all duration-300 font-mono text-[10px]">
-                  LOGIN
-                </button>
-              </Link>
-              <Link href="/signup" onClick={() => setMobileMenuOpen(false)}>
-                <button className="w-full text-left px-3 py-2.5 border-2 border-white/40 bg-white/5 hover:bg-white/15 backdrop-blur-md text-white transition-all duration-300 font-mono text-[10px] font-bold">
-                  SIGN UP
-                </button>
-              </Link>
-            </div>
-          </div>
-        )}
-      </nav>
+      {/* Use shared Navbar component */}
+      <Navbar />
 
       {/* Enhanced Background Effects */}
       <div className="fixed inset-0 stars-bg pointer-events-none opacity-30"></div>
       <div className="fixed inset-0 grid-pattern pointer-events-none opacity-20"></div>
-      
+
       {/* 3D Generative Art Background */}
       <div className="fixed inset-0 pointer-events-none opacity-20">
         <Suspense fallback={<div className="w-full h-full bg-black" />}>
           <GenerativeArtScene />
         </Suspense>
       </div>
-      
+
       {/* Animated gradient overlay */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
       </div>
-      
+
       {/* Hero Section - Enhanced */}
       <section className="relative min-h-screen flex items-center justify-center px-6 py-20">
         <div className="max-w-6xl w-full">
@@ -171,10 +85,10 @@ export default function LandingPage() {
               PROTECT YOUR INVESTMENTS WITH AI-POWERED TOKEN ANALYSIS. DETECT SCAMS, RUG PULLS & HONEYPOTS BEFORE YOU BUY.
             </p>
             <p className="text-sm lg:text-base text-white/70 mb-8 leading-relaxed font-mono">
-              Comprehensive 10-factor risk algorithm analyzes contract security, holder distribution, liquidity depth, and market behavior across 6+ blockchains. 
+              Comprehensive 10-factor risk algorithm analyzes contract security, holder distribution, liquidity depth, and market behavior across 6+ blockchains.
               Powered by Groq AI (Llama 3.3 70B) for intelligent token classification (meme vs utility). Real-time data from Mobula, Moralis, GoPlus, and Helius APIs.
             </p>
-            
+
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2 text-white/60 text-xs font-mono">
                 <Binary className="w-4 h-4" />
@@ -189,7 +103,7 @@ export default function LandingPage() {
                 <span>5 DATA SOURCES</span>
               </div>
             </div>
-            
+
             <div className="hidden lg:block absolute -left-4 top-1/2 w-3 h-3 border border-white opacity-30" style={{ transform: 'translateY(-50%)' }}>
               <div className="absolute top-1/2 left-1/2 w-1 h-1 bg-white" style={{ transform: 'translate(-50%, -50%)' }}></div>
             </div>
@@ -226,7 +140,7 @@ export default function LandingPage() {
                 <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-200"></div>
               </button>
             </Link>
-            
+
             <Link href="/signup">
               <button className="relative px-10 py-5 bg-transparent border-2 border-white/50 text-white font-mono text-base lg:text-lg hover:bg-white/10 hover:border-white transition-all duration-200 group">
                 <span className="flex items-center gap-2 justify-center">
@@ -260,7 +174,7 @@ export default function LandingPage() {
               INTELLIGENT TOKEN CLASSIFICATION
             </h2>
             <p className="text-white/70 text-sm lg:text-base font-mono max-w-3xl mx-auto leading-relaxed">
-              Our AI analyzes token metadata to instantly classify tokens as meme or utility, applying appropriate risk assessment. 
+              Our AI analyzes token metadata to instantly classify tokens as meme or utility, applying appropriate risk assessment.
               Meme tokens receive +15 risk penalty due to higher volatility, while utility tokens are evaluated on fundamentals.
             </p>
           </div>
@@ -363,7 +277,7 @@ export default function LandingPage() {
       </section>
 
       {/* Core Technology Section - NEW */}
-      <section className="relative px-6 py-20 border-t border-white/10">
+      <section id="technology" className="relative px-6 py-20 border-t border-white/10">
         <div className="max-w-7xl mx-auto">
           <div className="mb-16">
             <div className="flex items-center gap-2 mb-4 opacity-60">
@@ -479,7 +393,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section - Enhanced */}
-      <section className="relative px-6 py-20 border-t border-white/10">
+      <section id="features" className="relative px-6 py-20 border-t border-white/10">
         <div className="max-w-7xl mx-auto">
           {/* Section Header */}
           <div className="mb-16">
@@ -729,7 +643,7 @@ export default function LandingPage() {
                   $0
                 </div>
                 <p className="text-sm text-white/40 font-mono mb-8">PERFECT FOR GETTING STARTED</p>
-                
+
                 <ul className="space-y-4 mb-10">
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
@@ -775,7 +689,7 @@ export default function LandingPage() {
                 ⚡ RECOMMENDED
               </div>
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent"></div>
-              
+
               <CardContent className="p-8 lg:p-10 relative z-10">
                 <div className="flex items-center gap-2 mb-4 opacity-60">
                   <div className="w-6 h-px bg-white"></div>
@@ -861,7 +775,7 @@ export default function LandingPage() {
           <p className="text-white/70 text-base lg:text-lg font-mono mb-12 max-w-2xl mx-auto leading-relaxed">
             Join thousands of traders using Tokenomics Lab for comprehensive token analysis, risk assessment, and data-driven investment decisions.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <Link href="/signup">
               <button className="px-10 py-5 bg-white text-black font-mono text-base border-2 border-white hover:bg-transparent hover:text-white transition-all duration-200 group font-bold">
@@ -871,7 +785,7 @@ export default function LandingPage() {
                 </span>
               </button>
             </Link>
-            
+
             <Link href="/dashboard">
               <button className="px-10 py-5 bg-transparent border-2 border-white text-white font-mono text-base hover:bg-white/10 transition-all duration-200">
                 VIEW DEMO

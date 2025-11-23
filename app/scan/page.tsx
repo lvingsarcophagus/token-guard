@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
-import { 
-  Shield, 
+import {
+  Shield,
   Search,
   AlertTriangle,
   CheckCircle,
@@ -51,7 +51,7 @@ export default function ScanPage() {
     try {
       const query = search.trim()
       const data = await TokenScanService.scanToken(query)
-      
+
       if (!data.priceData && !data.securityData) {
         setError('TOKEN NOT FOUND. PLEASE CHECK THE ADDRESS OR SYMBOL.')
         setLoading(false)
@@ -114,14 +114,14 @@ export default function ScanPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/Tokenomicslab.ico" alt="Tokenomics Lab" className="w-8 h-8 object-contain" />
+              <img src="/tokenomics-lab-logo.ico" alt="Tokenomics Lab" className="w-8 h-8 object-contain" />
               <span className="text-white font-mono font-bold tracking-wider text-lg">
                 TOKENOMICS LAB
               </span>
             </Link>
 
             <div className="flex items-center gap-4">
-              <Link 
+              <Link
                 href={userProfile?.plan === 'PREMIUM' ? '/premium' : '/free-dashboard'}
                 className="flex items-center gap-2 px-4 py-2 bg-transparent border border-white/30 text-white font-mono text-xs tracking-wider hover:bg-white hover:text-black transition-all duration-200"
               >
@@ -135,7 +135,7 @@ export default function ScanPage() {
 
       {/* Main Content */}
       <main className="relative px-4 lg:px-8 py-12 max-w-7xl mx-auto">
-        
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4 opacity-60">
@@ -143,7 +143,7 @@ export default function ScanPage() {
             <span className="text-white text-[10px] font-mono tracking-wider">SECURITY ANALYSIS</span>
             <div className="flex-1 h-px bg-white"></div>
           </div>
-          
+
           <h1 className="text-3xl lg:text-5xl font-bold text-white font-mono tracking-wider mb-4">
             TOKEN SCANNER
           </h1>
@@ -203,7 +203,7 @@ export default function ScanPage() {
         {/* Results */}
         {tokenData && (
           <div className="space-y-6">
-            
+
             {/* Token Info Header */}
             <div className="border border-white/30 bg-black/50 backdrop-blur-sm p-6">
               <div className="flex items-start justify-between gap-4">
@@ -232,9 +232,8 @@ export default function ScanPage() {
                       ${tokenData.priceData.price.toLocaleString()}
                     </p>
                     {tokenData.priceData.priceChange24h !== undefined && (
-                      <div className={`flex items-center gap-1 justify-end mt-1 ${
-                        tokenData.priceData.priceChange24h >= 0 ? 'text-green-500' : 'text-red-500'
-                      }`}>
+                      <div className={`flex items-center gap-1 justify-end mt-1 ${tokenData.priceData.priceChange24h >= 0 ? 'text-green-500' : 'text-red-500'
+                        }`}>
                         {tokenData.priceData.priceChange24h >= 0 ? (
                           <TrendingUp className="w-4 h-4" />
                         ) : (

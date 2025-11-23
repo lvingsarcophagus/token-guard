@@ -2,6 +2,10 @@ import { TokenData, RiskResult, RiskBreakdown } from './types/token-data'
 import { detectMemeTokenWithAI, generateAIExplanation, generateComprehensiveAISummary } from './ai/groq'
 import { getTwitterAdoptionData, calculateAdoptionRisk } from './twitter/adoption'
 import { getWeights, ChainType } from './risk-factors/weights'
+import { detectMemeToken, isOfficialToken as isWhitelistedToken } from './services/meme-detector'
+import { calculateHolderConcentration } from './risk-factors/holder-concentration'
+import { isOfficialToken, applyOfficialTokenOverride } from './services/official-token-resolver'
+import { checkDeadToken, applyDeadTokenOverride } from './risk-factors/dead-token'
 
 const WEIGHTS = {
   supplyDilution: 0.18,
@@ -197,6 +201,109 @@ export async function calculateRisk(
   console.log(`[Risk Calc] Overall Score (raw): ${overallScoreRaw.toFixed(2)}`)
 
   // ═══════════════════════════════════════════════════════════
+  // NEW: Official Token Resolver (CoinGecko check)
+  // ═══════════════════════════════════════════════════════════
+  let officialTokenResult: { isOfficial: boolean; marketCap: number } = { isOfficial: false, marketCap: 0 }
+  if (metadata?.tokenSymbol && data.marketCap > 50_000_000) {
+    const result = await isOfficialToken(metadata.tokenSymbol, (data as any).address)
+    if (result.isOfficial && result.marketCap) {
+      officialTokenResult = { isOfficial: true, marketCap: result.marketCap }
+    } else {
+      officialTokenResult = result as { isOfficial: boolean; marketCap: number }
+    }
+    const officialTokenResultTyped = officialTokenResult
+    if (officialTokenResult.isOfficial) {
+      console.log(`✓ [Official Token] Detected: ${metadata.tokenSymbol} with $${(officialTokenResult.marketCap! / 1e6).toFixed(0)}M MC`)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // NEW: Dead Token Detector
+  // ═══════════════════════════════════════════════════════════
+  const deadTokenCheck = checkDeadToken({
+    liquidityUSD: data.liquidityUSD,
+    volume24h: data.volume24h,
+    priceChange7d: (data as any).priceChange7d,
+    priceChange30d: (data as any).priceChange30d,
+    txCount24h: data.txCount24h,
+    holderCount: data.holderCount,
+    ath: (data as any).ath,
+    currentPrice: (data as any).priceUSD
+  })
+
+  // ═══════════════════════════════════════════════════════════
+  // NEW: Top 1 Holder ≥40% = Instant CRITICAL
+  // ═══════════════════════════════════════════════════════════
+  let top1HolderPct = 0
+  if ((data as any).topHolders && (data as any).topHolders.length > 0 && data.totalSupply) {
+    const top1Balance = typeof (data as any).topHolders[0].balance === 'string'
+      ? parseFloat((data as any).topHolders[0].balance)
+      : (data as any).topHolders[0].balance
+    top1HolderPct = top1Balance / data.totalSupply
+    
+    if (top1HolderPct >= 0.40) {
+      console.log(`🚨 [Top 1 Holder] ${(top1HolderPct * 100).toFixed(1)}% → Force CRITICAL (94)`)
+      overallScoreRaw = Math.max(overallScoreRaw, 94)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // NEW: 2025 Pump.fun Rug Killer (Most Important!)
+  // ═══════════════════════════════════════════════════════════
+  const isMeme = memeDetection.isMeme
+  const chain = metadata?.chain || ChainType.EVM
+  const ageDays = data.ageDays || 0
+  const tokenName = metadata?.tokenName || ''
+  const tokenSymbol = metadata?.tokenSymbol || ''
+  const burnedPercentage = data.burnedSupply && data.totalSupply ? (data.burnedSupply / data.totalSupply) * 100 : 0
+  
+  if (isMeme && chain === ChainType.SOLANA && ageDays <= 60) {
+    let penalty = 0
+    const rugFlags: string[] = []
+    
+    // High MC but low liquidity (classic pump.fun pattern)
+    if (data.marketCap > 15_000_000 && (data.liquidityUSD || 0) < 1_200_000) {
+      penalty += 40
+      rugFlags.push('High MC + Low liquidity')
+    }
+    
+    // High MC but few holders (bundled wallets)
+    if (data.marketCap > 10_000_000 && (data.holderCount || 0) < 1500) {
+      penalty += 30
+      rugFlags.push('High MC + Few holders')
+    }
+    
+    // Suspicious naming patterns
+    if (/official|real|2\.0|67|69|420|1000x|pump|moon/i.test(tokenName + tokenSymbol)) {
+      penalty += 20
+      rugFlags.push('Pump.fun naming pattern')
+    }
+    
+    // High volume but few holders (wash trading)
+    if ((data.volume24h || 0) > 5_000_000 && (data.holderCount || 0) < 1000) {
+      penalty += 20
+      rugFlags.push('High volume + Few holders')
+    }
+    
+    // Young meme with no burns
+    if (burnedPercentage < 1) {
+      penalty += 20
+      rugFlags.push('No token burns')
+    }
+    
+    if (penalty > 0) {
+      overallScoreRaw += penalty
+      console.log(`🚨 [2025 Pump.fun Rug] +${penalty} penalty: ${rugFlags.join(', ')}`)
+    }
+    
+    // Force to red zone if score >= 70
+    if (overallScoreRaw >= 70) {
+      overallScoreRaw = Math.max(overallScoreRaw, 92)
+      console.log(`🚨 [2025 Pump.fun Rug] Force to CRITICAL zone (92+)`)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // ✅ CRITICAL OVERRIDE: Apply critical flags penalty
   // ═══════════════════════════════════════════════════════════
   const criticalFlags = extractCriticalFlags(data, hasGoPlus)
@@ -209,6 +316,28 @@ export async function calculateRisk(
   } else if (criticalCount >= 1) {
     console.log(`⚠️ [Critical Override] ${criticalCount} CRITICAL flag(s) detected → +15 penalty`)
     overallScoreFinal = Math.min(overallScoreRaw + 15, 100)
+  }
+
+  // Apply Official Token Override (reduces score by 45+)
+  // BUT: Reduce bonus for meme tokens (they're inherently riskier)
+  if (officialTokenResult.isOfficial) {
+    const isMeme = memeDetection.isMeme
+    const override = applyOfficialTokenOverride(overallScoreFinal, true, officialTokenResult.marketCap, isMeme)
+    overallScoreFinal = override.score
+    
+    if (isMeme) {
+      console.log(`⚠️ [Official Meme Token] Reduced bonus applied (meme coins are inherently volatile)`)
+    }
+  }
+
+  // Apply Dead Token Override (forces score >= 90)
+  // Skip dead token check for official tokens (they have verified data)
+  if (deadTokenCheck.isDead && !officialTokenResult.isOfficial) {
+    const override = applyDeadTokenOverride(overallScoreFinal, deadTokenCheck)
+    overallScoreFinal = override.score
+    if (override.criticalFlag) {
+      criticalFlags.push(override.criticalFlag)
+    }
   }
 
   const riskLevel = classifyRisk(overallScoreFinal)
@@ -252,6 +381,7 @@ export async function calculateRisk(
     ...baseResult,
     breakdown: scores,
     critical_flags: extractCriticalFlags(data, hasGoPlus),
+    positive_signals: extractPositiveSignals(data),
     upcoming_risks: calculateUpcomingRisks(data),
     detailed_insights: generateInsights(scores, data, hasGoPlus)
   }
@@ -712,8 +842,19 @@ function calcBurnDeflation(data: TokenData): number {
   // If no capped supply AND no burns = high risk
   if (!hasCappedSupply && (data.burnedSupply === 0 || !data.burnedSupply)) return 80
   
-  // Calculate burn ratio
+  // Calculate burn ratio and percentage
   const burnRatio = data.burnedSupply / data.totalSupply
+  const burnedPercentage = burnRatio * 100
+  
+  // NEW: Special case for young memes (<60 days)
+  const ageDays = data.ageDays || 999
+  const tokenSymbol = (data as any).symbol || ''
+  const isMeme = /doge|shib|pepe|floki|inu|moon|pump|69|420/i.test(tokenSymbol)
+  
+  if (isMeme && ageDays <= 60) {
+    // Young memes: penalize heavily if <1% burned
+    return burnedPercentage < 1 ? 10 : 0
+  }
   
   // High burn rate scenarios
   if (burnRatio > 0.5) return 10  // Over 50% burned = very low risk
@@ -794,11 +935,13 @@ function extractCriticalFlags(data: TokenData, hasGoPlus: boolean): string[] {
     if (data.lp_locked === false) flags.push('⚠️ Liquidity not locked')
   }
   
-  // SOLANA FREEZE AUTHORITY - ALWAYS CRITICAL
+  // SOLANA SPECIFIC: Split positive vs critical flags
   if (data.chain === 'SOLANA' || data.chain?.toUpperCase() === 'SOLANA') {
+    // CRITICAL: Freeze authority exists
     if (data.freeze_authority_exists) {
       flags.push('🚨 FREEZE AUTHORITY - Creator can lock wallets')
     }
+    // NOTE: Mint/freeze revoked are handled as POSITIVE flags in result.positive_signals
   }
   
   if (data.nextUnlock30dPct && data.nextUnlock30dPct > 0.15) {
@@ -808,6 +951,33 @@ function extractCriticalFlags(data: TokenData, hasGoPlus: boolean): string[] {
     flags.push(`👥 ${(data.top10HoldersPct * 100).toFixed(0)}% held by top 10 wallets`)
   }
   return flags
+}
+
+/**
+ * Extract positive signals for Solana tokens (mint/freeze revoked)
+ */
+function extractPositiveSignals(data: TokenData): string[] {
+  const signals: string[] = []
+  
+  // Solana-specific positive signals
+  if (data.chain === 'SOLANA' || data.chain?.toUpperCase() === 'SOLANA') {
+    if (!data.freeze_authority_exists && data.freeze_authority_exists !== undefined) {
+      signals.push('✅ Freeze Authority Revoked - Wallets cannot be frozen')
+    }
+    if (!data.is_mintable && (data as any).mint_authority_exists === false) {
+      signals.push('✅ Mint Authority Revoked - Supply is fixed')
+    }
+  }
+  
+  // General positive signals
+  if (data.owner_renounced) {
+    signals.push('✅ Ownership Renounced - Contract cannot be modified')
+  }
+  if (data.lp_locked) {
+    signals.push('✅ Liquidity Locked - Rug pull protection')
+  }
+  
+  return signals
 }
 
 /**

@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { theme } from "@/lib/theme"
 import { ArrowLeft } from "lucide-react"
+import Navbar from "@/components/navbar"
 
 export default function PricingPage() {
   return (
-    <div className={`relative min-h-screen ${theme.backgrounds.main} overflow-hidden`}>
+    <>
+      <Navbar />
+      <div className={`relative min-h-screen ${theme.backgrounds.main} overflow-hidden`}>
       {/* Stars background */}
       <div className="fixed inset-0 stars-bg pointer-events-none"></div>
 
@@ -156,5 +159,6 @@ export default function PricingPage() {
         }
       `}</style>
     </div>
+    </>
   )
 }

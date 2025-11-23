@@ -107,6 +107,12 @@ export async function createUserProfile(userId: string, email: string, displayNa
 export async function updateUserPlan(userId: string, plan: 'FREE' | 'PREMIUM'): Promise<void> {
   try {
     const userRef = doc(db, 'users', userId)
+    const docSnap = await getDoc(userRef)
+    
+    if (!docSnap.exists()) {
+      throw new Error('User document does not exist')
+    }
+    
     await updateDoc(userRef, {
       plan,
       'usage.dailyLimit': plan === 'PREMIUM' ? -1 : 10
@@ -120,6 +126,13 @@ export async function updateUserPlan(userId: string, plan: 'FREE' | 'PREMIUM'): 
 export async function incrementTokenAnalyzed(userId: string): Promise<void> {
   try {
     const userRef = doc(db, 'users', userId)
+    const docSnap = await getDoc(userRef)
+    
+    if (!docSnap.exists()) {
+      console.error('[Firestore] Cannot increment - user document does not exist')
+      return
+    }
+    
     await updateDoc(userRef, {
       'usage.tokensAnalyzed': increment(1)
     })

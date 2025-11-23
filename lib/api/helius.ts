@@ -86,14 +86,19 @@ export async function getHeliusSolanaData(
 
     const tokenData = data[0];
 
-    // Extract authorities and additional data
+    // Extract authorities and additional data with proper fallbacks
     const securityData: SolanaSecurityData = {
       freezeAuthority: tokenData.freezeAuthority || null,
       mintAuthority: tokenData.mintAuthority || null,
       programAuthority: tokenData.updateAuthority || null,
-      supply: tokenData.supply || tokenData.tokenAmount?.amount,
-      decimals: tokenData.decimals || tokenData.tokenAmount?.decimals,
-      holderCount: tokenData.holderCount
+      supply: tokenData.supply || 
+              tokenData.onChainMetadata?.tokenAmount?.amount ||
+              tokenData.offChainMetadata?.supply,
+      decimals: tokenData.decimals || 
+                tokenData.onChainMetadata?.tokenAmount?.decimals ||
+                tokenData.offChainMetadata?.decimals || 
+                9, // Default for most SPL tokens
+      holderCount: tokenData.holderCount || undefined
     };
 
     console.log(`[Helius] Security data retrieved:`, {
@@ -192,8 +197,11 @@ export async function getHeliusEnhancedData(
       return null;
     }
 
-    // Get token holders using RPC
-    const holdersData = await getHeliusTokenHolders(tokenAddress);
+    // Extract total supply for holder percentage calculations
+    const totalSupply = tokenMeta.supply || 0;
+
+    // Get token holders using RPC (pass total supply for percentage calculation)
+    const holdersData = await getHeliusTokenHolders(tokenAddress, totalSupply);
 
     // Get recent transactions using Enhanced Transactions API
     const transactionsData = await getHeliusTransactions(tokenAddress);
@@ -203,7 +211,7 @@ export async function getHeliusEnhancedData(
         name: tokenMeta.onChainMetadata?.metadata?.data?.name || tokenMeta.offChainMetadata?.name || 'Unknown',
         symbol: tokenMeta.onChainMetadata?.metadata?.data?.symbol || tokenMeta.offChainMetadata?.symbol || 'UNKNOWN',
         decimals: tokenMeta.decimals || 9,
-        supply: tokenMeta.supply || 0
+        supply: totalSupply
       },
       authorities: {
         freezeAuthority: tokenMeta.freezeAuthority || null,
@@ -239,9 +247,12 @@ export async function getHeliusEnhancedData(
 /**
  * Get token holders using Helius RPC
  */
-async function getHeliusTokenHolders(tokenAddress: string): Promise<{ count: number; topHolders: any[] } | null> {
+async function getHeliusTokenHolders(tokenAddress: string, totalSupply?: number): Promise<{ count: number; topHolders: any[]; top10Percentage?: number; top50Percentage?: number; top100Percentage?: number } | null> {
   try {
-    if (!HELIUS_API_KEY) return null;
+    if (!HELIUS_API_KEY) {
+      console.warn('[Helius] API key not configured for holder data');
+      return null;
+    }
 
     // Use getTokenAccounts RPC method to get holders
     const response = await fetch(HELIUS_RPC_URL, {
@@ -255,26 +266,66 @@ async function getHeliusTokenHolders(tokenAddress: string): Promise<{ count: num
       })
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`[Helius] Holder RPC request failed: ${response.status}`);
+      return null;
+    }
 
     const data = await response.json();
     
-    if (data.result && data.result.value) {
+    // Check for RPC errors
+    if (data.error) {
+      console.warn(`[Helius] RPC error: ${data.error.message}`);
+      return null;
+    }
+    
+    if (data.result && data.result.value && Array.isArray(data.result.value) && data.result.value.length > 0) {
       const accounts = data.result.value;
+      
+      console.log(`[Helius] Found ${accounts.length} token holders`);
+      
+      // Calculate percentages if total supply is available
+      const topHolders = accounts.slice(0, 10).map((acc: any) => {
+        const balance = parseFloat(acc.amount) || 0;
+        const percentage = totalSupply && totalSupply > 0 ? (balance / totalSupply) * 100 : 0;
+        
+        return {
+          address: acc.address,
+          balance: balance,
+          percentage: percentage
+        };
+      });
+
+      // Calculate concentration metrics
+      let top10Percentage, top50Percentage, top100Percentage;
+      
+      if (totalSupply && totalSupply > 0) {
+        const top10Sum = accounts.slice(0, Math.min(10, accounts.length))
+          .reduce((sum: number, acc: any) => sum + (parseFloat(acc.amount) || 0), 0);
+        top10Percentage = (top10Sum / totalSupply) * 100;
+
+        const top50Sum = accounts.slice(0, Math.min(50, accounts.length))
+          .reduce((sum: number, acc: any) => sum + (parseFloat(acc.amount) || 0), 0);
+        top50Percentage = (top50Sum / totalSupply) * 100;
+
+        const top100Sum = accounts.slice(0, Math.min(100, accounts.length))
+          .reduce((sum: number, acc: any) => sum + (parseFloat(acc.amount) || 0), 0);
+        top100Percentage = (top100Sum / totalSupply) * 100;
+      }
       
       return {
         count: accounts.length,
-        topHolders: accounts.slice(0, 10).map((acc: any, index: number) => ({
-          address: acc.address,
-          balance: acc.amount,
-          percentage: 0 // Would need total supply to calculate
-        }))
+        topHolders,
+        top10Percentage,
+        top50Percentage,
+        top100Percentage
       };
     }
 
+    console.warn('[Helius] No holder data returned from RPC');
     return null;
-  } catch (error) {
-    console.error('[Helius] Error fetching holders:', error);
+  } catch (error: any) {
+    console.error('[Helius] Error fetching holders:', error.message);
     return null;
   }
 }
@@ -284,7 +335,10 @@ async function getHeliusTokenHolders(tokenAddress: string): Promise<{ count: num
  */
 async function getHeliusTransactions(tokenAddress: string): Promise<{ count24h: number; volume24h: number; uniqueTraders24h: number } | null> {
   try {
-    if (!HELIUS_API_KEY) return null;
+    if (!HELIUS_API_KEY) {
+      console.warn('[Helius] API key not configured for transaction data');
+      return null;
+    }
 
     // Get recent transactions for the token
     const response = await fetch(
@@ -295,7 +349,10 @@ async function getHeliusTransactions(tokenAddress: string): Promise<{ count24h: 
       }
     );
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`[Helius] Transaction API request failed: ${response.status}`);
+      return null;
+    }
 
     const transactions = await response.json();
     

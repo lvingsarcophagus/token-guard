@@ -85,6 +85,14 @@ export async function POST(request: NextRequest) {
               volume24h: mobulaData.data.volume || 0,
               priceChange24h: mobulaData.data.price_change_24h || 0,
               liquidity: mobulaData.data.liquidity || 0,
+              logo: mobulaData.data.logo || mobulaData.data.image || null,
+            }
+            
+            // Debug log for logo
+            if (!tokenData.logo) {
+              console.log(`[Price API] No logo found in Mobula response for ${searchParam}`)
+            } else {
+              console.log(`[Price API] Logo found: ${tokenData.logo}`)
             }
           }
         } else {

@@ -23,37 +23,58 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setNotifications([])
+      setUnreadCount(0)
+      return
+    }
 
-    // Listen to notifications from top-level notifications collection
-    const notificationsRef = collection(db, 'notifications')
-    const q = query(
-      notificationsRef,
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
-    )
+    let unsubscribe: (() => void) | null = null
 
-    const unsubscribe = onSnapshot(
-      q, 
-      (snapshot) => {
-        const notifs = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as Notification))
+    try {
+      // Listen to notifications from top-level notifications collection
+      const notificationsRef = collection(db, 'notifications')
+      const q = query(
+        notificationsRef,
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      )
 
-        setNotifications(notifs)
-        setUnreadCount(notifs.filter(n => !n.read).length)
-      },
-      (error) => {
-        // Handle permission errors gracefully
-        console.warn('[Notifications] Permission denied or error:', error.code)
-        // Set empty state on permission error
-        setNotifications([])
-        setUnreadCount(0)
+      unsubscribe = onSnapshot(
+        q, 
+        (snapshot) => {
+          const notifs = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          } as Notification))
+
+          setNotifications(notifs)
+          setUnreadCount(notifs.filter(n => !n.read).length)
+        },
+        (error) => {
+          // Handle permission errors gracefully
+          console.warn('[Notifications] Permission denied or error:', error.code)
+          // Set empty state on permission error
+          setNotifications([])
+          setUnreadCount(0)
+        }
+      )
+    } catch (error) {
+      console.warn('[Notifications] Failed to setup listener:', error)
+      setNotifications([])
+      setUnreadCount(0)
+    }
+
+    return () => {
+      if (unsubscribe) {
+        try {
+          unsubscribe()
+        } catch (error) {
+          // Silently handle cleanup errors
+          console.warn('[Notifications] Cleanup error:', error)
+        }
       }
-    )
-
-    return () => unsubscribe()
+    }
   }, [user])
 
   const markAsRead = async (notificationId: string) => {

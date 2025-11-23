@@ -21,6 +21,54 @@ export function generateTOTPUri(secret: string, email: string, issuer: string = 
   return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`;
 }
 
+// Generate QR code data URL (for server-side use)
+export async function generateQRCode(secret: string, email: string, issuer: string = 'Tokenomics Lab'): Promise<string> {
+  // Dynamic import for server-side only
+  if (typeof window === 'undefined') {
+    const QRCode = require('qrcode')
+    const uri = generateTOTPUri(secret, email, issuer)
+    return await QRCode.toDataURL(uri)
+  }
+  return ''
+}
+
+// Synchronous TOTP verification (for server-side use)
+export function verifyTOTPToken(secret: string, token: string): boolean {
+  // Simple synchronous verification using speakeasy-like logic
+  const crypto = require('crypto')
+  
+  const key = base32Decode(secret)
+  const epoch = Math.floor(Date.now() / 1000)
+  const timeStep = 30
+  const window = 1
+  
+  for (let i = -window; i <= window; i++) {
+    const time = Math.floor(epoch / timeStep) + i
+    
+    const timeBytes = Buffer.alloc(8)
+    let t = time
+    for (let j = 7; j >= 0; j--) {
+      timeBytes[j] = t & 0xff
+      t = Math.floor(t / 256)
+    }
+    
+    const hmac = crypto.createHmac('sha1', Buffer.from(key)).update(timeBytes).digest()
+    const offset = hmac[hmac.length - 1] & 0xf
+    const code = (
+      ((hmac[offset] & 0x7f) << 24) |
+      ((hmac[offset + 1] & 0xff) << 16) |
+      ((hmac[offset + 2] & 0xff) << 8) |
+      (hmac[offset + 3] & 0xff)
+    ) % 1000000
+    
+    if (code.toString().padStart(6, '0') === token) {
+      return true
+    }
+  }
+  
+  return false
+}
+
 // Base32 decode
 function base32Decode(secret: string): Uint8Array {
   const base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -42,19 +90,15 @@ function base32Decode(secret: string): Uint8Array {
 
 // HMAC-SHA1 implementation
 async function hmacSha1(key: Uint8Array, message: Uint8Array): Promise<Uint8Array> {
-  // Create new Uint8Arrays to ensure we have proper ArrayBuffers
-  const keyArray = new Uint8Array(key);
-  const messageArray = new Uint8Array(message);
-  
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    keyArray,
+    key.buffer as ArrayBuffer,
     { name: 'HMAC', hash: 'SHA-1' },
     false,
     ['sign']
   );
   
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageArray);
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, message.buffer as ArrayBuffer);
   return new Uint8Array(signature);
 }
 

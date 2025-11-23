@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { onAuthStateChanged, type User } from "firebase/auth"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import { getUserProfile, createUserProfile, updateUserPlan } from "@/lib/services/firestore-service"
 import { migrateUserSchema } from "@/lib/services/migration-service"
@@ -13,6 +13,7 @@ interface UserData {
   uid: string
   email: string
   name?: string
+  photoURL?: string | null
   tier: "free" | "pro"
   role?: "user" | "admin"
   dailyAnalyses: number
@@ -21,6 +22,8 @@ interface UserData {
   createdAt: string
   nextBillingDate?: string
   walletAddress?: string
+  company?: string
+  country?: string
 }
 
 interface AuthContextType {
@@ -66,6 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUserData({
               uid: user.uid,
               email: user.email || '',
+              name: profile.name || profile.displayName || '',
+              photoURL: profile.photoURL || null,
+              role: profile.role || 'user',
               tier: profile.plan === 'PREMIUM' ? 'pro' : 'free',
               dailyAnalyses: profile.usage?.tokensAnalyzed || 0,
               watchlist: [],
@@ -73,6 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               createdAt: profile.createdAt instanceof Date 
                 ? profile.createdAt.toISOString() 
                 : (profile.createdAt as any)?.toDate?.()?.toISOString() || new Date().toISOString(),
+              walletAddress: profile.walletAddress || '',
+              company: profile.company || '',
+              country: profile.country || '',
             })
             
             // Initialize analytics tracking for this user
@@ -93,6 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUserData({
                   uid: user.uid,
                   email: user.email || '',
+                  name: profile.name || profile.displayName || '',
+                  photoURL: profile.photoURL || null,
+                  role: profile.role || 'user',
                   tier: profile.plan === 'PREMIUM' ? 'pro' : 'free',
                   dailyAnalyses: profile.usage?.tokensAnalyzed || 0,
                   watchlist: [],
@@ -100,6 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   createdAt: profile.createdAt instanceof Date 
                     ? profile.createdAt.toISOString() 
                     : (profile.createdAt as any)?.toDate?.()?.toISOString() || new Date().toISOString(),
+                  walletAddress: profile.walletAddress || '',
+                  company: profile.company || '',
+                  country: profile.country || '',
                 })
               }
             } catch (createError) {
@@ -134,11 +149,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setUserData({
                 uid: user.uid,
                 email: user.email || '',
+                name: user.displayName || '',
+                photoURL: user.photoURL || null,
+                role: 'user',
                 tier: 'free',
                 dailyAnalyses: 0,
                 watchlist: [],
                 alerts: [],
                 createdAt: new Date().toISOString(),
+                walletAddress: '',
+                company: '',
+                country: '',
               })
             }
           }
@@ -168,6 +189,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserData({
         uid: user.uid,
         email: user.email || '',
+        name: profile.name || profile.displayName || '',
+        photoURL: profile.photoURL || null,
+        role: profile.role || 'user',
         tier: profile.plan === 'PREMIUM' ? 'pro' : 'free',
         dailyAnalyses: profile.usage?.tokensAnalyzed || 0,
         watchlist: [],
@@ -175,6 +199,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         createdAt: profile.createdAt instanceof Date 
           ? profile.createdAt.toISOString() 
           : (profile.createdAt as any)?.toDate?.()?.toISOString() || new Date().toISOString(),
+        walletAddress: profile.walletAddress || '',
+        company: profile.company || '',
+        country: profile.country || '',
       })
     }
   }
@@ -182,10 +209,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (data: Partial<UserData>) => {
     if (!user) return
 
-    const userRef = doc(db, "users", user.uid)
-    await setDoc(userRef, data, { merge: true })
-    setUserData((prev) => ({ ...prev, ...data }) as UserData)
-    await refreshProfile()
+    console.log('[AuthContext] Updating profile for user:', user.uid)
+    console.log('[AuthContext] Data to update:', Object.keys(data))
+    
+    try {
+      const userRef = doc(db, "users", user.uid)
+      
+      // Use updateDoc instead of setDoc to avoid state conflicts
+      const updateData: Record<string, any> = {}
+      
+      // Map UserData fields to Firestore schema
+      if (data.name !== undefined) updateData.name = data.name
+      if (data.photoURL !== undefined) updateData.photoURL = data.photoURL
+      if (data.walletAddress !== undefined) updateData.walletAddress = data.walletAddress
+      if (data.company !== undefined) updateData.company = data.company
+      if (data.country !== undefined) updateData.country = data.country
+      
+      await updateDoc(userRef, updateData)
+      
+      console.log('[AuthContext] Firestore update complete')
+      
+      // Update local state immediately
+      setUserData((prev) => ({ ...prev, ...data }) as UserData)
+      
+      // Refresh profile from server
+      await refreshProfile()
+      
+      console.log('[AuthContext] Profile refresh complete')
+    } catch (error) {
+      console.error('[AuthContext] Update profile error:', error)
+      throw error
+    }
   }
 
   return <AuthContext.Provider value={{ user, userData, userProfile, loading, updateProfile, refreshProfile }}>{children}</AuthContext.Provider>

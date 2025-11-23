@@ -30,6 +30,7 @@ export interface TokenPriceData {
   volume24h: number
   priceChange24h: number
   liquidity?: number
+  logo?: string
   source: string
 }
 
@@ -74,12 +75,12 @@ export class TokenScanService {
     }
 
     const detectedChain = chain || chainInfo?.chainId || '1'
-    
+
     // Determine if input is an address or symbol
-    const isAddress = addressOrSymbol.startsWith('0x') || 
-                     (chainInfo?.addressFormat === 'base58' && chainInfo?.chainName === 'Solana') ||
-                     (chainInfo?.addressFormat === 'base58' && addressOrSymbol.length >= 32)
-    
+    const isAddress = addressOrSymbol.startsWith('0x') ||
+      (chainInfo?.addressFormat === 'base58' && chainInfo?.chainName === 'Solana') ||
+      (chainInfo?.addressFormat === 'base58' && addressOrSymbol.length >= 32)
+
     try {
       // For Solana and non-EVM chains, only fetch price data (GoPlus doesn't support them)
       const canFetchSecurity = chainInfo?.isEVM === true && isAddress && getGoPlusChainId(detectedChain) !== null
@@ -221,11 +222,67 @@ export class TokenScanService {
   }
 
   /**
-   * Fetch security analysis from GoPlus (EVM chains only)
+   * Fetch security analysis from GoPlus (EVM) or Helius (Solana)
    */
   private static async fetchSecurityData(address: string, chain: string): Promise<TokenSecurityData | null> {
     try {
-      // Get GoPlus-compatible chain ID
+      // Check if it's Solana
+      if (chain === 'solana' || chain === '1399811149') {
+        const { getHeliusDashboardData } = await import('./api/helius')
+        const heliusData = await getHeliusDashboardData(address)
+
+        if (!heliusData) return null
+
+        // Map Helius data to TokenSecurityData format
+        const issues: string[] = []
+        if (heliusData.authorities.mintAuthority) issues.push('Mint Authority is set (can mint more tokens)')
+        if (heliusData.authorities.freezeAuthority) issues.push('Freeze Authority is set (can freeze wallets)')
+        if (heliusData.authorities.updateAuthority) issues.push('Update Authority is set (can change metadata)')
+
+        const riskScore = (heliusData.authorities.mintAuthority ? 30 : 0) +
+          (heliusData.authorities.freezeAuthority ? 30 : 0) +
+          (heliusData.authorities.updateAuthority ? 10 : 0)
+
+        return {
+          contractAddress: address,
+          isHoneypot: false, // Not directly applicable to Solana in the same way
+          isVerified: true,
+          riskLevel: riskScore > 50 ? 'high' : riskScore > 20 ? 'medium' : 'low',
+          riskScore: Math.min(100, riskScore),
+          issues,
+          safetyChecks: [
+            {
+              label: 'Mint Authority',
+              status: heliusData.authorities.mintAuthority ? 'danger' : 'safe',
+              message: heliusData.authorities.mintAuthority ? 'Mint authority is enabled' : 'Mint authority is revoked (Safe)'
+            },
+            {
+              label: 'Freeze Authority',
+              status: heliusData.authorities.freezeAuthority ? 'danger' : 'safe',
+              message: heliusData.authorities.freezeAuthority ? 'Freeze authority is enabled' : 'Freeze authority is revoked (Safe)'
+            },
+            {
+              label: 'Update Authority',
+              status: heliusData.authorities.updateAuthority ? 'warning' : 'safe',
+              message: heliusData.authorities.updateAuthority ? 'Metadata can be updated' : 'Metadata is immutable'
+            },
+            {
+              label: 'Top Holders',
+              status: 'safe', // Logic could be more complex
+              message: `Top 10 holders own ${(heliusData.holders.topHolders.reduce((acc: any, h: any) => acc + h.percentage, 0) * 100).toFixed(2)}%`
+            }
+          ],
+          liquidity: 0, // Need a source for this
+          holderCount: heliusData.holders.count,
+          ownershipRenounced: !heliusData.authorities.updateAuthority,
+          isMintable: !!heliusData.authorities.mintAuthority,
+          // Add extra Helius data for the UI to use
+          // @ts-ignore
+          heliusData: heliusData
+        }
+      }
+
+      // EVM Logic (GoPlus)
       const goPlusChainId = getGoPlusChainId(chain)
       if (!goPlusChainId) {
         console.warn(`GoPlus doesn't support chain ${chain}`)
@@ -299,20 +356,20 @@ export class TokenScanService {
     checks.push({
       label: 'Honeypot Detection',
       status: securityData.isHoneypot ? 'danger' : 'safe',
-      message: securityData.isHoneypot ? 
-        'This token may be a honeypot - avoid trading!' : 
+      message: securityData.isHoneypot ?
+        'This token may be a honeypot - avoid trading!' :
         'No honeypot patterns detected',
     })
 
     // Ownership check
-    const hasOwnerIssues = securityData.issues.some((i: string) => 
+    const hasOwnerIssues = securityData.issues.some((i: string) =>
       i.includes('Owner can change balance') || i.includes('Hidden owner')
     )
     checks.push({
       label: 'Ownership',
       status: hasOwnerIssues ? 'danger' : 'safe',
-      message: hasOwnerIssues ? 
-        'Owner has dangerous privileges' : 
+      message: hasOwnerIssues ?
+        'Owner has dangerous privileges' :
         'No ownership concerns detected',
     })
 
@@ -321,8 +378,8 @@ export class TokenScanService {
     checks.push({
       label: 'Trading Taxes',
       status: hasTaxIssues ? 'warning' : 'safe',
-      message: hasTaxIssues ? 
-        'High trading taxes detected' : 
+      message: hasTaxIssues ?
+        'High trading taxes detected' :
         'Normal trading taxes',
     })
 
@@ -331,8 +388,8 @@ export class TokenScanService {
     checks.push({
       label: 'Sell Restrictions',
       status: hasSellRestrictions ? 'danger' : 'safe',
-      message: hasSellRestrictions ? 
-        'You may not be able to sell all tokens!' : 
+      message: hasSellRestrictions ?
+        'You may not be able to sell all tokens!' :
         'No sell restrictions detected',
     })
 
@@ -341,8 +398,8 @@ export class TokenScanService {
     checks.push({
       label: 'Contract Safety',
       status: hasDangerousFunctions ? 'danger' : 'safe',
-      message: hasDangerousFunctions ? 
-        'Contract has dangerous functions' : 
+      message: hasDangerousFunctions ?
+        'Contract has dangerous functions' :
         'Contract appears safe',
     })
 

@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { AuthProvider } from "@/contexts/auth-context"
 import CookieConsentBanner from "@/components/cookie-consent"
 import { ToastProvider } from "@/components/toast-provider"
+import ModalProvider from "@/components/modal-provider"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
@@ -15,9 +16,9 @@ export const metadata: Metadata = {
   description: "Professional tokenomics analysis with real-time risk assessment, security audits, and market intelligence",
   generator: "v0.app",
   icons: {
-    icon: '/Tokenomicslab.ico',
-    shortcut: '/Tokenomicslab.ico',
-    apple: '/Tokenomicslab.ico',
+    icon: '/tokenomics-lab-logo.ico',
+    shortcut: '/tokenomics-lab-logo.ico',
+    apple: '/tokenomics-lab-logo.ico',
   },
 }
 
@@ -31,6 +32,7 @@ export default function RootLayout({
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased bg-black text-white`}>
         <AuthProvider>
           <ToastProvider />
+          <ModalProvider />
           <main>
             {children}
           </main>
