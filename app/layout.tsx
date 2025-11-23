@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { AuthProvider } from "@/contexts/auth-context"
 import CookieConsentBanner from "@/components/cookie-consent"
 import { ToastProvider } from "@/components/toast-provider"
+import ModalProvider from "@/components/modal-provider"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
@@ -31,6 +32,7 @@ export default function RootLayout({
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased bg-black text-white`}>
         <AuthProvider>
           <ToastProvider />
+          <ModalProvider />
           <main>
             {children}
           </main>

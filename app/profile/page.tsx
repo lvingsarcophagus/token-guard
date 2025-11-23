@@ -14,9 +14,12 @@ import { Download, Trash2, Shield } from "lucide-react"
 import TwoFactorSetup from "@/components/two-factor-setup"
 import ProfileImageUpload from "@/components/profile-image-upload"
 import Loader from "@/components/loader"
+import CustomModal from "@/components/custom-modal"
+import { useModal } from "@/hooks/use-modal"
 
 export default function ProfilePage() {
   const { user, userData, updateProfile, loading } = useAuth()
+  const { modalState, closeModal, showSuccess, showError, showConfirm } = useModal()
   const [name, setName] = useState("")
   const [company, setCompany] = useState("")
   const [country, setCountry] = useState("")
@@ -56,9 +59,14 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     setSaving(true)
-    await updateProfile({ name, company, country })
-    setSaving(false)
-    alert("Profile updated!")
+    try {
+      await updateProfile({ name, company, country })
+      showSuccess("Profile Updated", "Your profile information has been saved successfully!")
+    } catch (error) {
+      showError("Update Failed", "Failed to update profile. Please try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleConnectWallet = async () => {
@@ -77,22 +85,28 @@ export default function ProfilePage() {
         const address = accounts[0]
         setWalletAddress(address)
         await updateProfile({ walletAddress: address })
-        alert("Wallet connected successfully!")
+        showSuccess("Wallet Connected", "Your wallet has been connected successfully!")
       } else {
-        alert("Please install MetaMask or Phantom wallet extension")
+        showError("Wallet Not Found", "Please install MetaMask or Phantom wallet extension to continue.")
       }
     } catch (error) {
       console.error("Error connecting wallet:", error)
-      alert("Failed to connect wallet")
+      showError("Connection Failed", "Failed to connect wallet. Please try again.")
     } finally {
       setConnectingWallet(false)
     }
   }
 
   const handleDisconnectWallet = async () => {
-    setWalletAddress("")
-    await updateProfile({ walletAddress: "" })
-    alert("Wallet disconnected")
+    showConfirm(
+      "Disconnect Wallet",
+      "Are you sure you want to disconnect your wallet?",
+      async () => {
+        setWalletAddress("")
+        await updateProfile({ walletAddress: "" })
+        showSuccess("Wallet Disconnected", "Your wallet has been disconnected.")
+      }
+    )
   }
 
   const handleExportData = async () => {
@@ -119,10 +133,10 @@ export default function ProfilePage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      alert("Your data has been exported successfully!")
+      showSuccess("Data Exported", "Your data has been exported successfully!")
     } catch (error) {
       console.error('Error exporting data:', error)
-      alert("Failed to export data. Please try again.")
+      showError("Export Failed", "Failed to export data. Please try again.")
     } finally {
       setExportingData(false)
     }
@@ -130,7 +144,7 @@ export default function ProfilePage() {
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== "DELETE MY ACCOUNT") {
-      alert("Please type 'DELETE MY ACCOUNT' to confirm")
+      showError("Confirmation Required", "Please type 'DELETE MY ACCOUNT' to confirm deletion.")
       return
     }
 
@@ -155,13 +169,14 @@ export default function ProfilePage() {
         throw new Error(errorData.error || 'Failed to delete account')
       }
 
-      alert("✅ Your account has been permanently deleted. You will be redirected to the home page.")
-
-      // Redirect to home (user will be automatically signed out by the API)
-      router.push('/')
+      showSuccess(
+        "Account Deleted",
+        "Your account has been permanently deleted. You will be redirected to the home page.",
+        () => router.push('/')
+      )
     } catch (error) {
       console.error('Error deleting account:', error)
-      alert("❌ Failed to delete account. Please try again or contact support.")
+      showError("Deletion Failed", "Failed to delete account. Please try again or contact support.")
       setDeletingAccount(false)
     }
   }
@@ -173,7 +188,20 @@ export default function ProfilePage() {
   if (!user) return null
 
   return (
-    <div className={`relative min-h-screen ${theme.backgrounds.main} overflow-hidden`}>
+    <>
+      <CustomModal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        showCancel={modalState.showCancel}
+      />
+      
+      <div className={`relative min-h-screen ${theme.backgrounds.main} overflow-hidden`}>
       {/* Stars background */}
       <div className="fixed inset-0 stars-bg pointer-events-none"></div>
 
@@ -466,6 +494,8 @@ export default function ProfilePage() {
         </div>
       )}
 
+      </div>
+      
       <style jsx>{`
         .stars-bg {
           background-image: 
@@ -482,6 +512,6 @@ export default function ProfilePage() {
           opacity: 0.3;
         }
       `}</style>
-    </div>
+    </>
   )
 }
