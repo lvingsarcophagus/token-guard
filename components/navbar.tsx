@@ -167,6 +167,15 @@ export default function Navbar() {
         {/* Fullscreen Menu Overlay */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl animate-in fade-in duration-300">
+            {/* Close Button */}
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="absolute top-6 right-6 p-3 rounded-full border border-white/30 hover:border-white/40 bg-black/40 hover:bg-white/10 backdrop-blur-md transition-all duration-300 z-10"
+              aria-label="Close menu"
+            >
+              <X className="w-6 h-6 text-white" />
+            </button>
+
             <div className="flex flex-col items-center justify-center h-full space-y-6 p-8">
               {landingLinks.map((link, index) => (
                 <Link
