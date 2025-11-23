@@ -14,6 +14,11 @@ export interface UserDocument {
   email: string
   displayName: string | null
   photoURL: string | null
+  name?: string
+  company?: string
+  country?: string
+  walletAddress?: string
+  role?: 'user' | 'admin'
   plan: 'FREE' | 'PREMIUM'
   
   // Subscription details

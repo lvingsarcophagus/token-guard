@@ -167,8 +167,8 @@ export default function PremiumDashboard() {
     // No redirect - unified dashboard handles both free and premium users
   }, [user, userProfile, authLoading, router])
   
-  // Determine if user has premium features (check both plan and tier for compatibility)
-  const isPremium = userProfile?.plan === 'PREMIUM' || userProfile?.tier === 'pro'
+  // Determine if user has premium features
+  const isPremium = userProfile?.plan === 'PREMIUM'
   
   // DEBUG: Log premium status
   useEffect(() => {

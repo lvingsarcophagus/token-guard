@@ -15,6 +15,7 @@ interface UserData {
   name?: string
   photoURL?: string | null
   tier: "free" | "pro"
+  plan?: "FREE" | "PREMIUM"
   role?: "user" | "admin"
   dailyAnalyses: number
   watchlist: string[]
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               photoURL: profile.photoURL || null,
               role: profile.role || 'user',
               tier: profile.plan === 'PREMIUM' ? 'pro' : 'free',
+              plan: profile.plan,
               dailyAnalyses: profile.usage?.tokensAnalyzed || 0,
               watchlist: [],
               alerts: [],
@@ -106,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   photoURL: profile.photoURL || null,
                   role: profile.role || 'user',
                   tier: profile.plan === 'PREMIUM' ? 'pro' : 'free',
+                  plan: profile.plan,
                   dailyAnalyses: profile.usage?.tokensAnalyzed || 0,
                   watchlist: [],
                   alerts: [],
@@ -153,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 photoURL: user.photoURL || null,
                 role: 'user',
                 tier: 'free',
+                plan: 'FREE',
                 dailyAnalyses: 0,
                 watchlist: [],
                 alerts: [],
@@ -193,6 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         photoURL: profile.photoURL || null,
         role: profile.role || 'user',
         tier: profile.plan === 'PREMIUM' ? 'pro' : 'free',
+        plan: profile.plan,
         dailyAnalyses: profile.usage?.tokensAnalyzed || 0,
         watchlist: [],
         alerts: [],
