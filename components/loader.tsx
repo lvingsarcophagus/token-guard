@@ -29,7 +29,7 @@ export default function Loader({ size = 'md', text, fullScreen = false }: Loader
       transition: {
         duration: 2,
         repeat: Infinity,
-        ease: "linear"
+        ease: "linear" as const
       }
     }
   }
@@ -42,7 +42,7 @@ export default function Loader({ size = 'md', text, fullScreen = false }: Loader
         duration: 1.5,
         repeat: Infinity,
         delay: i * 0.2,
-        ease: "easeInOut"
+        ease: "easeInOut" as const
       }
     })
   }

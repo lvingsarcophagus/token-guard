@@ -21,6 +21,8 @@ export type ActivityAction =
   | 'user_login'
   | 'user_logout'
   | 'user_signup'
+  | 'admin_login'
+  | 'admin_logout'
   | 'token_scan'
   | 'watchlist_add'
   | 'watchlist_remove'
@@ -89,13 +91,17 @@ export async function logTokenScan(
 export async function logAuth(
   userId: string,
   userEmail: string,
-  action: 'user_login' | 'user_logout' | 'user_signup'
+  action: 'user_login' | 'user_logout' | 'user_signup' | 'admin_login' | 'admin_logout'
 ): Promise<void> {
   const details = action === 'user_login' 
     ? 'User logged in'
     : action === 'user_logout'
     ? 'User logged out'
-    : 'New user signed up'
+    : action === 'user_signup'
+    ? 'New user signed up'
+    : action === 'admin_login'
+    ? 'Admin logged in'
+    : 'Admin logged out'
   
   await logActivity(userId, userEmail, action, details)
 }
