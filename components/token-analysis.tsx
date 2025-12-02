@@ -74,9 +74,9 @@ export default function TokenAnalysis({ token, userTier }: TokenAnalysisProps) {
         <RiskExplanation
           riskScore={securityData.riskScore}
           riskLevel={securityData.riskLevel}
-          aiInsights={(token as any).ai_insights || securityData.ai_insights}
-          aiSummary={(token as any).ai_summary || securityData.ai_summary}
-          criticalFlags={(token as any).critical_flags || securityData.critical_flags || []}
+          aiInsights={(token as any).ai_insights || (securityData as any).ai_insights}
+          aiSummary={(token as any).ai_summary || (securityData as any).ai_summary}
+          criticalFlags={(token as any).critical_flags || (securityData as any).critical_flags || []}
           isPremium={userTier === "pro"}
         />
       )}

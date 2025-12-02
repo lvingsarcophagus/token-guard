@@ -41,16 +41,22 @@ export async function GET(request: NextRequest) {
     }
 
     const snapshot = await query.get();
-    const subscriptions = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
-      startDate: doc.data().startDate?.toDate?.()?.toISOString() || null,
-      expiryDate: doc.data().expiryDate?.toDate?.()?.toISOString() || null,
-    }));
+    const subscriptions = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        userId: data.userId || '',
+        amount: data.amount || '0',
+        status: data.status || 'unknown',
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+        startDate: data.startDate?.toDate?.()?.toISOString() || null,
+        expiryDate: data.expiryDate?.toDate?.()?.toISOString() || null,
+      };
+    });
 
     // Get user details for each subscription
-    const userIds = [...new Set(subscriptions.map(s => s.userId))];
+    const userIds = [...new Set(subscriptions.map(s => s.userId).filter(Boolean))];
     const userPromises = userIds.map(uid => 
       db.collection('users').doc(uid).get()
     );

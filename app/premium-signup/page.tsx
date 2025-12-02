@@ -24,7 +24,7 @@ export default function PremiumSignupPage() {
 
   // Check if user already has premium
   useEffect(() => {
-    if (userProfile?.tier === 'PREMIUM' || userProfile?.tier === 'pro') {
+    if (userProfile?.plan === 'PREMIUM') {
       setAlreadyPremium(true)
     }
   }, [userProfile])

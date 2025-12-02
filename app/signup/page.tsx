@@ -117,8 +117,8 @@ export default function SignUpPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
 
       // Use selected plan or check auto-premium
-      let userTier = selectedPlan
-      let userPlan = selectedPlan
+      let userTier: 'FREE' | 'PAY_PER_USE' | 'PREMIUM' = selectedPlan
+      let userPlan: 'FREE' | 'PAY_PER_USE' | 'PREMIUM' = selectedPlan
       let redirectPath = selectedPlan === 'PAY_PER_USE' ? '/dashboard' : '/free-dashboard'
       let userCredits = selectedPlan === 'PAY_PER_USE' ? 0 : undefined
       

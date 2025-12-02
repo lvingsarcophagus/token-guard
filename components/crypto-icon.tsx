@@ -68,7 +68,7 @@ export function TokenBadge({
 }) {
   return (
     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border border-white/20 bg-white/5 ${className}`}>
-      <CryptoIcon chain={chain || 'ethereum'} token={token} className="w-3 h-3" />
+      <CryptoIcon chain={chain || 'ethereum'} className="w-3 h-3" />
       <span className="text-xs font-mono text-white/60">{token.toUpperCase()}</span>
     </div>
   );

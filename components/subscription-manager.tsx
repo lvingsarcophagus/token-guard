@@ -86,7 +86,7 @@ export function SubscriptionManager() {
     );
   }
 
-  if (userProfile?.tier !== 'PREMIUM') {
+  if (userProfile?.plan !== 'PREMIUM') {
     return null;
   }
 
