@@ -39,136 +39,116 @@ export default function LandingPage() {
 
       {/* Hero Section - Enhanced */}
       <section className="relative min-h-screen flex items-center justify-center px-6 py-20">
-        <div className="max-w-6xl w-full">
-          {/* Top decorative line */}
-          <div className="flex items-center gap-2 mb-8 opacity-60">
-            <div className="w-8 lg:w-12 h-px bg-white"></div>
-            <span className="text-white text-[10px] font-mono tracking-wider">∞</span>
-            <div className="flex-1 h-px bg-white"></div>
-            <span className="text-white text-[10px] font-mono tracking-wider">TOKENOMICS.LAB</span>
-          </div>
+        <div className="max-w-6xl w-full mx-auto">
+            {/* Top decorative line with enhanced styling - Centered */}
+            <div className="flex items-center justify-center gap-3 mb-12 opacity-70">
+              <div className="w-12 lg:w-16 h-px bg-gradient-to-r from-transparent via-white to-white"></div>
+              <div className="flex items-center gap-2">
+                <span className="text-white text-[10px] font-mono tracking-[0.3em]">∞</span>
+                <div className="w-px h-4 bg-white/50"></div>
+                <span className="text-white text-[10px] font-mono tracking-[0.3em]">TOKENOMICS.LAB</span>
+              </div>
+              <div className="w-12 lg:w-16 h-px bg-gradient-to-r from-white to-transparent"></div>
+            </div>
 
-          {/* Main Title - Enhanced */}
-          <div className="relative mb-8">
-            <div className="hidden lg:block absolute -right-3 top-0 bottom-0 w-1 dither-pattern opacity-40"></div>
-            <h1 className="text-4xl lg:text-6xl xl:text-8xl font-bold text-white mb-6 leading-tight font-mono tracking-wider">
-              AI-POWERED
-              <br />
-              <span className="text-white/80">TOKEN</span> ANALYSIS
-            </h1>
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-              <div className="px-3 py-1 bg-white/10 border border-white/30 backdrop-blur-sm">
-                <span className="text-white text-xs font-mono tracking-wider">MEME + UTILITY</span>
-              </div>
-              <div className="px-3 py-1 bg-white/10 border border-white/30 backdrop-blur-sm">
-                <span className="text-white text-xs font-mono tracking-wider">MULTI-CHAIN</span>
-              </div>
-              <div className="px-3 py-1 bg-white/10 border border-white/30 backdrop-blur-sm">
-                <span className="text-white text-xs font-mono tracking-wider">REAL-TIME</span>
-              </div>
-              <div className="px-3 py-1 bg-white/10 border border-white/30 backdrop-blur-sm">
-                <span className="text-white/90 text-xs font-mono tracking-wider">AI-POWERED</span>
+          {/* Main Title - Centered */}
+          <div className="relative mb-12 text-center">
+            <div className="space-y-6">
+              <h1 className="text-5xl lg:text-7xl xl:text-9xl font-bold text-white leading-[0.9] font-mono tracking-tight">
+                ADVANCED
+                <br />
+                <span className="text-white/70">TOKENOMICS</span>
+                <br />
+                <span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">ANALYSIS</span>
+              </h1>
+              
+              {/* Enhanced badges with better spacing - Centered */}
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+                <div className="group relative px-4 py-2 bg-white/5 border border-white/20 backdrop-blur-sm hover:bg-white/10 hover:border-white/40 transition-all duration-300">
+                  <span className="text-white text-xs font-mono tracking-[0.2em] font-bold">10-FACTOR ALGORITHM</span>
+                  <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </div>
+                <div className="px-4 py-2 bg-white/5 border border-white/20 backdrop-blur-sm">
+                  <span className="text-white/80 text-xs font-mono tracking-[0.2em]">MULTI-CHAIN</span>
+                </div>
+                <div className="px-4 py-2 bg-white/5 border border-white/20 backdrop-blur-sm">
+                  <span className="text-white/80 text-xs font-mono tracking-[0.2em]">REAL-TIME</span>
+                </div>
+                <div className="px-4 py-2 bg-white/5 border border-white/20 backdrop-blur-sm">
+                  <span className="text-white/80 text-xs font-mono tracking-[0.2em]">MEME + UTILITY</span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Decorative dots pattern */}
-          <div className="flex gap-1 mb-8 opacity-40">
-            {Array.from({ length: 80 }).map((_, i) => (
-              <div key={i} className="w-0.5 h-0.5 bg-white"></div>
+          {/* Decorative separator with animation - Centered */}
+          <div className="flex items-center justify-center gap-1 mb-12 opacity-40">
+            {Array.from({ length: 100 }).map((_, i) => (
+              <div 
+                key={i} 
+                className="w-0.5 h-0.5 bg-white animate-pulse" 
+                style={{ animationDelay: `${i * 20}ms`, animationDuration: '2s' }}
+              ></div>
             ))}
           </div>
 
-          {/* Description - Enhanced */}
-          <div className="relative max-w-3xl mb-10">
-            <p className="text-base lg:text-lg text-white/90 mb-6 leading-relaxed font-mono">
-              PROTECT YOUR INVESTMENTS WITH AI-POWERED TOKEN ANALYSIS. DETECT SCAMS, RUG PULLS & HONEYPOTS BEFORE YOU BUY.
-            </p>
-            <p className="text-sm lg:text-base text-white/70 mb-8 leading-relaxed font-mono">
-              Comprehensive 10-factor risk algorithm analyzes contract security, holder distribution, liquidity depth, and market behavior across 6+ blockchains.
-              Powered by Groq AI (Llama 3.3 70B) for intelligent token classification (meme vs utility). Real-time data from Mobula, Moralis, GoPlus, and Helius APIs.
-            </p>
-
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2 text-white/60 text-xs font-mono">
-                <Binary className="w-4 h-4" />
-                <span>10 RISK FACTORS</span>
+          {/* Description - Centered */}
+          <div className="relative max-w-4xl mx-auto mb-14 text-center">
+            <div className="space-y-6">
+              <p className="text-xl lg:text-2xl text-white font-mono leading-relaxed font-bold">
+                PROTECT YOUR INVESTMENTS WITH PROPRIETARY 10-FACTOR RISK SCORING.
+              </p>
+              <p className="text-base lg:text-lg text-white/60 font-mono leading-relaxed">
+                Detect scams, rug pulls & honeypots before you buy. Our custom algorithm analyzes contract security, holder distribution, liquidity depth, and market behavior across 6+ blockchains.
+              </p>
+              
+              {/* Feature highlights with icons - Centered */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 max-w-5xl mx-auto">
+                <div className="flex flex-col items-center text-center gap-3 p-6 border border-white/10 bg-white/5 backdrop-blur-sm">
+                  <Binary className="w-6 h-6 text-white/80" />
+                  <div>
+                    <div className="text-white font-mono text-sm font-bold mb-1">10 RISK FACTORS</div>
+                    <div className="text-white/50 font-mono text-xs">Comprehensive analysis</div>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center text-center gap-3 p-6 border border-white/10 bg-white/5 backdrop-blur-sm">
+                  <GitBranch className="w-6 h-6 text-white/80" />
+                  <div>
+                    <div className="text-white font-mono text-sm font-bold mb-1">6 BLOCKCHAINS</div>
+                    <div className="text-white/50 font-mono text-xs">Multi-chain support</div>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center text-center gap-3 p-6 border border-white/10 bg-white/5 backdrop-blur-sm">
+                  <Hexagon className="w-6 h-6 text-white/80" />
+                  <div>
+                    <div className="text-white font-mono text-sm font-bold mb-1">5 DATA SOURCES</div>
+                    <div className="text-white/50 font-mono text-xs">Real-time aggregation</div>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-white/60 text-xs font-mono">
-                <GitBranch className="w-4 h-4" />
-                <span>6 BLOCKCHAINS</span>
-              </div>
-              <div className="flex items-center gap-2 text-white/60 text-xs font-mono">
-                <Hexagon className="w-4 h-4" />
-                <span>5 DATA SOURCES</span>
-              </div>
-            </div>
-
-            <div className="hidden lg:block absolute -left-4 top-1/2 w-3 h-3 border border-white opacity-30" style={{ transform: 'translateY(-50%)' }}>
-              <div className="absolute top-1/2 left-1/2 w-1 h-1 bg-white" style={{ transform: 'translate(-50%, -50%)' }}></div>
             </div>
           </div>
 
-          {/* Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-            <div className="border border-white/20 bg-black/40 backdrop-blur-sm p-4">
-              <div className="text-2xl lg:text-3xl font-bold text-white font-mono mb-1">10</div>
-              <div className="text-xs text-white/60 font-mono">RISK FACTORS</div>
-            </div>
-            <div className="border border-white/20 bg-black/40 backdrop-blur-sm p-4">
-              <div className="text-2xl lg:text-3xl font-bold text-white font-mono mb-1">6</div>
-              <div className="text-xs text-white/60 font-mono">BLOCKCHAINS</div>
-            </div>
-            <div className="border border-white/20 bg-black/40 backdrop-blur-sm p-4">
-              <div className="text-2xl lg:text-3xl font-bold text-white font-mono mb-1">5</div>
-              <div className="text-xs text-white/60 font-mono">API SOURCES</div>
-            </div>
-            <div className="border border-white/20 bg-black/40 backdrop-blur-sm p-4">
-              <div className="text-2xl lg:text-3xl font-bold text-white font-mono mb-1">SOL</div>
-              <div className="text-xs text-white/60 font-mono">SOLANA FOCUS</div>
-            </div>
-          </div>
-
-          {/* CTA Buttons - Enhanced */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Link href="/dashboard">
-              <button className="relative px-10 py-5 bg-white text-black font-mono text-base lg:text-lg border-2 border-white hover:bg-transparent hover:text-white transition-all duration-200 group overflow-hidden">
-                <span className="relative z-10 flex items-center gap-2 justify-center font-bold">
-                  START ANALYZING TOKENS
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </span>
-                <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-200"></div>
-              </button>
-            </Link>
-
-            {/* Hidden for now - pay-per-scan feature
-            <Link href="/pay-per-scan">
-              <button className="relative px-10 py-5 bg-blue-600 border-2 border-blue-500 text-white font-mono text-base lg:text-lg hover:bg-blue-700 transition-all duration-200 group">
-                <span className="flex items-center gap-2 justify-center font-bold">
-                  PAY-PER-SCAN ($0.05)
-                  <Zap className="w-5 h-5" />
-                </span>
-              </button>
-            </Link>
-            */}
-
+          {/* CTA Button - Centered */}
+          <div className="flex justify-center mb-16">
             <Link href="/signup">
-              <button className="relative px-10 py-5 bg-transparent border-2 border-white/50 text-white font-mono text-base lg:text-lg hover:bg-white/10 hover:border-white transition-all duration-200 group">
-                <span className="flex items-center gap-2 justify-center">
-                  CREATE FREE ACCOUNT
-                  <Sparkles className="w-5 h-5" />
+              <button className="group relative px-16 py-6 bg-white text-black font-mono text-base lg:text-xl border-2 border-white hover:bg-black hover:text-white transition-all duration-300 overflow-hidden">
+                <span className="relative z-10 flex items-center gap-3 justify-center font-bold tracking-wider">
+                  GET STARTED
+                  <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
                 </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </button>
             </Link>
           </div>
 
-          {/* Bottom technical notation */}
-          <div className="flex items-center gap-2 opacity-40">
-            <span className="text-white text-[9px] font-mono">∞</span>
-            <div className="flex-1 h-px bg-white max-w-xs"></div>
-            <span className="text-white text-[9px] font-mono">AI.MEME.DETECTION.V2.0</span>
-            <div className="flex-1 h-px bg-white max-w-xs"></div>
-            <span className="text-white text-[9px] font-mono">∞</span>
+          {/* Bottom technical notation with enhanced styling */}
+          <div className="flex items-center justify-center gap-3 opacity-50 pt-8">
+            <span className="text-white text-[10px] font-mono tracking-[0.3em]">∞</span>
+            <div className="w-32 h-px bg-gradient-to-r from-transparent via-white to-transparent"></div>
+            <span className="text-white text-[10px] font-mono tracking-[0.3em]">RISK.ALGORITHM.V2.0</span>
+            <div className="w-32 h-px bg-gradient-to-r from-transparent via-white to-transparent"></div>
+            <span className="text-white text-[10px] font-mono tracking-[0.3em]">∞</span>
           </div>
         </div>
       </section>

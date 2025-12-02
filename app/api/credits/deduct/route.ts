@@ -96,9 +96,9 @@ export async function POST(request: NextRequest) {
     // Log transaction
     await adminDb.collection('credit_transactions').add({
       userId,
-      feature,
+      feature: feature || 'token_scan',
       cost,
-      reason: reason || feature,
+      reason: reason || feature || 'Token scan',
       tokenAddress: tokenAddress || null,
       type: 'usage',
       status: 'completed',
@@ -106,22 +106,26 @@ export async function POST(request: NextRequest) {
     })
 
     // Log activity
-    await adminDb.collection('activity_logs').add({
+    const activityLog: any = {
       userId,
       userEmail: userData?.email || 'unknown',
       action: 'credits_used',
-      details: `Used ${cost} credits for ${reason || feature}`,
+      details: `Used ${cost} credits for ${reason || feature || 'unknown'}`,
       metadata: {
         cost,
-        feature,
-        reason,
-        tokenAddress,
         balanceBefore: currentCredits,
         balanceAfter: currentCredits - cost
       },
       timestamp: FieldValue.serverTimestamp(),
       userAgent: request.headers.get('user-agent') || 'Unknown'
-    })
+    }
+
+    // Only add optional fields if they have values
+    if (feature) activityLog.metadata.feature = feature
+    if (reason) activityLog.metadata.reason = reason
+    if (tokenAddress) activityLog.metadata.tokenAddress = tokenAddress
+
+    await adminDb.collection('activity_logs').add(activityLog)
 
     const newBalance = currentCredits - cost
 

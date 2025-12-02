@@ -35,19 +35,78 @@ export default function SignUpPage() {
     setLoading(true)
     setError("")
 
-    // Validation
+    // Enhanced Validation with boundary checks
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!email || !emailRegex.test(email)) {
+      setError("Please enter a valid email address")
+      setLoading(false)
+      return
+    }
+    
+    if (email.length > 254) {
+      setError("Email address is too long (max 254 characters)")
+      setLoading(false)
+      return
+    }
+
+    // Password validation
+    if (!password || password.length < 8) {
+      setError("Password must be at least 8 characters long")
+      setLoading(false)
+      return
+    }
+    
+    if (password.length > 128) {
+      setError("Password is too long (max 128 characters)")
+      setLoading(false)
+      return
+    }
+    
     if (password !== confirmPassword) {
       setError("Passwords do not match")
       setLoading(false)
       return
     }
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long")
+    
+    // Password strength check
+    const hasUpperCase = /[A-Z]/.test(password)
+    const hasLowerCase = /[a-z]/.test(password)
+    const hasNumber = /[0-9]/.test(password)
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+      setError("Password must contain uppercase, lowercase, and numbers")
       setLoading(false)
       return
     }
 
+    // Name validation
+    if (name && name.length > 100) {
+      setError("Name is too long (max 100 characters)")
+      setLoading(false)
+      return
+    }
+    
+    // Sanitize name input
+    const sanitizedName = name.trim().replace(/[<>]/g, '')
+    
+    // Company validation
+    if (company && company.length > 200) {
+      setError("Company name is too long (max 200 characters)")
+      setLoading(false)
+      return
+    }
+    
+    // Country validation
+    if (country && country.length > 100) {
+      setError("Country name is too long (max 100 characters)")
+      setLoading(false)
+      return
+    }
+
+    // Terms agreement
     if (!agreeToTerms) {
       setError("You must agree to the Terms of Service and Privacy Policy")
       setLoading(false)
@@ -82,9 +141,9 @@ export default function SignUpPage() {
       const userDoc: any = {
         uid: userCredential.user.uid,
         email,
-        name,
-        company: company || null,
-        country: country || null,
+        name: sanitizedName || null,
+        company: company?.trim() || null,
+        country: country?.trim() || null,
         tier: userTier,
         plan: userPlan,
         usage: {
@@ -293,11 +352,20 @@ export default function SignUpPage() {
                 id="name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value.length <= 100) {
+                    setName(value)
+                  }
+                }}
                 className={`mt-1 ${theme.inputs.default}`}
                 placeholder="John Doe"
+                maxLength={100}
                 required
               />
+              <p className={`mt-1 ${theme.text.tiny} ${theme.text.secondary} ${theme.fonts.mono}`}>
+                {name.length}/100 characters
+              </p>
             </div>
 
             <div>
@@ -308,10 +376,19 @@ export default function SignUpPage() {
                 id="company"
                 type="text"
                 value={company}
-                onChange={(e) => setCompany(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value.length <= 200) {
+                    setCompany(value)
+                  }
+                }}
                 className={`mt-1 ${theme.inputs.default}`}
                 placeholder="Acme Inc."
+                maxLength={200}
               />
+              <p className={`mt-1 ${theme.text.tiny} ${theme.text.secondary} ${theme.fonts.mono}`}>
+                {company.length}/200 characters
+              </p>
             </div>
           </div>
 
@@ -324,11 +401,20 @@ export default function SignUpPage() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value.length <= 254) {
+                    setEmail(value)
+                  }
+                }}
                 className={`mt-1 ${theme.inputs.default}`}
                 placeholder="you@example.com"
+                maxLength={254}
                 required
               />
+              <p className={`mt-1 ${theme.text.tiny} ${theme.text.secondary} ${theme.fonts.mono}`}>
+                {email.length}/254 characters
+              </p>
             </div>
 
             <div>
@@ -339,10 +425,19 @@ export default function SignUpPage() {
                 id="country"
                 type="text"
                 value={country}
-                onChange={(e) => setCountry(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value.length <= 100) {
+                    setCountry(value)
+                  }
+                }}
                 className={`mt-1 ${theme.inputs.default}`}
                 placeholder="United States"
+                maxLength={100}
               />
+              <p className={`mt-1 ${theme.text.tiny} ${theme.text.secondary} ${theme.fonts.mono}`}>
+                {country.length}/100 characters
+              </p>
             </div>
           </div>
 
@@ -354,14 +449,20 @@ export default function SignUpPage() {
               id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value
+                if (value.length <= 128) {
+                  setPassword(value)
+                }
+              }}
               className={`mt-1 ${theme.inputs.default}`}
               placeholder="••••••••"
               required
               minLength={8}
+              maxLength={128}
             />
             <p className={`mt-1 ${theme.text.tiny} ${theme.text.secondary} ${theme.fonts.mono}`}>
-              Minimum 8 characters
+              {password.length}/128 characters - must include uppercase, lowercase, and numbers
             </p>
           </div>
 
@@ -373,12 +474,21 @@ export default function SignUpPage() {
               id="confirmPassword"
               type="password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value
+                if (value.length <= 128) {
+                  setConfirmPassword(value)
+                }
+              }}
               className={`mt-1 ${theme.inputs.default}`}
               placeholder="••••••••"
               required
               minLength={8}
+              maxLength={128}
             />
+            <p className={`mt-1 ${theme.text.tiny} ${theme.text.secondary} ${theme.fonts.mono}`}>
+              {confirmPassword.length}/128 characters
+            </p>
           </div>
 
           {/* Plan Selection */}

@@ -190,26 +190,37 @@ export default function TermsOfServicePage() {
                 <h3 className={`${theme.text.base} ${theme.fonts.bold} ${theme.text.primary} ${theme.fonts.mono} mb-2 uppercase`}>
                   6.1 Subscription Plans
                 </h3>
-                <p className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} leading-relaxed ml-4`}>
-                  TokenGuard offers FREE and PREMIUM subscription tiers. Premium features require a paid subscription with automatic renewal.
+                <p className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} leading-relaxed ml-4 mb-3`}>
+                  TokenGuard offers three subscription tiers:
                 </p>
+                <ul className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} space-y-2 ml-8`}>
+                  <li>• <span className="text-white">FREE</span> - Basic token analysis with 20 scans per day, honeypot checks, and risk scores</li>
+                  <li>• <span className="text-white">PAY-AS-YOU-GO</span> - Micropayment model via x402 protocol (USDC on Base). Pay only for features you use: AI Risk Analyst ($0.10/report), Portfolio Audit ($0.05/token), Enhanced Charts, and ad-free experience</li>
+                  <li>• <span className="text-white">PRO ($29/month)</span> - Unlimited access to all features including Smart Alerts (24/7 blockchain monitoring), custom branding, priority support, and always ad-free experience</li>
+                </ul>
               </div>
 
               <div>
                 <h3 className={`${theme.text.base} ${theme.fonts.bold} ${theme.text.primary} ${theme.fonts.mono} mb-2 uppercase`}>
                   6.2 Billing
                 </h3>
+                <p className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} leading-relaxed ml-4 mb-2`}>
+                  <span className="text-white">Pro Subscriptions:</span> Billed monthly in advance with automatic renewal. All subscription fees are non-refundable except as required by law.
+                </p>
                 <p className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} leading-relaxed ml-4`}>
-                  Subscriptions are billed monthly or annually in advance. All fees are non-refundable except as required by law or stated in our refund policy.
+                  <span className="text-white">Pay-As-You-Go:</span> Charged per transaction via x402 protocol using USDC on Base blockchain. No recurring charges. Credits are non-refundable once purchased.
                 </p>
               </div>
 
               <div>
                 <h3 className={`${theme.text.base} ${theme.fonts.bold} ${theme.text.primary} ${theme.fonts.mono} mb-2 uppercase`}>
-                  6.3 Cancellation
+                  6.3 Cancellation and Refunds
                 </h3>
+                <p className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} leading-relaxed ml-4 mb-2`}>
+                  <span className="text-white">Pro Subscriptions:</span> You may cancel at any time. Access to Pro features continues until the end of your billing period. We offer a 30-day money-back guarantee for new Pro subscriptions.
+                </p>
                 <p className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} leading-relaxed ml-4`}>
-                  You may cancel your subscription at any time. Access to Premium features continues until the end of your billing period. We offer a 30-day money-back guarantee for new Premium subscriptions.
+                  <span className="text-white">Pay-As-You-Go:</span> No cancellation needed. Simply stop using paid features. Unused credits do not expire but are non-refundable.
                 </p>
               </div>
             </div>
@@ -305,7 +316,7 @@ export default function TermsOfServicePage() {
             </div>
 
             <p className={`${theme.text.small} ${theme.text.secondary} ${theme.fonts.mono} leading-relaxed`}>
-              These Terms are governed by and construed in accordance with the laws of [Your Jurisdiction], without regard to its conflict of law principles. Any disputes shall be resolved in the courts of [Your Jurisdiction].
+              These Terms are governed by and construed in accordance with the laws of the Republic of Lithuania, without regard to its conflict of law principles. Any disputes shall be resolved in the courts of the Republic of Lithuania.
             </p>
           </section>
 

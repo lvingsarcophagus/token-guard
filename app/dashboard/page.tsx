@@ -730,12 +730,8 @@ export default function PremiumDashboard() {
               })
               console.log('[Credits] Deducted 0.5 credits for scan')
               
-              // Refresh user profile to update credits display
-              if (typeof window !== 'undefined') {
-                setTimeout(() => {
-                  window.location.reload()
-                }, 2000)
-              }
+              // Refresh user profile to update credits display (without reloading page)
+              loadDashboardData()
             } catch (error) {
               console.error('[Credits] Failed to deduct credits:', error)
             }

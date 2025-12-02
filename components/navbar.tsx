@@ -191,9 +191,9 @@ export default function Navbar() {
                   {link.label.toUpperCase()}
                 </Link>
               ))}
-              <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+              <Link href="/signup" onClick={() => setMobileMenuOpen(false)}>
                 <button className="mt-8 px-8 py-4 rounded-xl border-2 border-white/30 bg-white/10 hover:bg-white hover:text-black text-white transition-all duration-300 font-mono text-lg font-bold tracking-wider hover:scale-110">
-                  GET STARTED
+                  SIGN UP
                 </button>
               </Link>
             </div>
@@ -244,11 +244,11 @@ export default function Navbar() {
                 {userData?.role === "admin" && (
                   <button
                     onClick={() => router.push('/admin/dashboard')}
-                    className="hidden sm:flex items-center gap-2 px-3 rounded-xl border border-purple-500/30 hover:border-purple-400/50 bg-purple-500/10 hover:bg-purple-500/20 backdrop-blur-md transition-all duration-300 h-9"
+                    className="hidden sm:flex items-center gap-2 px-3 rounded-xl border border-white/20 hover:border-white/30 bg-black/40 hover:bg-white/5 backdrop-blur-md transition-all duration-300 h-9"
                     title="Admin Panel"
                   >
-                    <Shield className="w-4 h-4 text-purple-400" />
-                    <span className="text-xs font-mono text-purple-300 font-bold tracking-wider">ADMIN</span>
+                    <Shield className="w-4 h-4 text-white/60" />
+                    <span className="text-xs font-mono text-white/70 font-bold tracking-wider">ADMIN</span>
                   </button>
                 )}
 
@@ -402,64 +402,56 @@ export default function Navbar() {
       {/* Fullscreen Menu Overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-[100] animate-in fade-in duration-300">
-          {/* Glassmorphic Background */}
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-3xl"></div>
+          {/* Clean Background */}
+          <div className="absolute inset-0 bg-black/95 backdrop-blur-2xl"></div>
           
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-purple-500/[0.05] pointer-events-none"></div>
-          
-          {/* Animated Gradient Orbs */}
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          {/* Subtle Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
           
           {/* Close Button */}
           <button
             onClick={() => setMobileMenuOpen(false)}
-            className="absolute top-6 right-6 p-3 rounded-full border border-white/30 hover:border-white/40 bg-black/40 hover:bg-white/10 backdrop-blur-md transition-all duration-300 z-10"
+            className="absolute top-6 right-6 p-3 rounded-xl border border-white/20 hover:border-white/40 bg-black/40 hover:bg-white/10 backdrop-blur-md transition-all duration-300 z-10"
             aria-label="Close menu"
           >
             <X className="w-6 h-6 text-white" />
           </button>
 
-          <div className="relative flex flex-col items-center justify-center h-full space-y-4 p-8 overflow-y-auto">
+          <div className="relative flex flex-col items-center justify-center h-full space-y-5 p-8 overflow-y-auto">
             {/* Navigation Links */}
-            {navLinks.map((link, index) => {
-              const Icon = link.icon
-              return (
-                <Link
-                  key={`${link.href}-fullscreen-${index}`}
-                  href={link.href}
-                  onClick={(e) => {
-                    handleNavClick(e, link.href)
-                    setMobileMenuOpen(false)
-                  }}
-                  className="flex items-center gap-3 text-2xl md:text-4xl font-bold text-white/60 hover:text-white transition-all duration-300 font-mono tracking-wider hover:scale-110"
-                >
-                  <Icon className="w-6 h-6 md:w-8 md:h-8" />
-                  {link.label.toUpperCase()}
-                </Link>
-              )
-            })}
+            {navLinks.map((link, index) => (
+              <Link
+                key={`${link.href}-fullscreen-${index}`}
+                href={link.href}
+                onClick={(e) => {
+                  handleNavClick(e, link.href)
+                  setMobileMenuOpen(false)
+                }}
+                className="text-3xl md:text-4xl font-bold text-white/60 hover:text-white transition-all duration-300 font-mono tracking-wider hover:scale-105"
+              >
+                {link.label.toUpperCase()}
+              </Link>
+            ))}
             
+            {/* Admin Panel Link */}
             {userData?.role === "admin" && (
               <Link
                 href="/admin/dashboard"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 text-2xl md:text-4xl font-bold text-purple-400/80 hover:text-purple-300 transition-all duration-300 font-mono tracking-wider hover:scale-110 border-t border-white/10 pt-4 mt-4"
+                className="text-3xl md:text-4xl font-bold text-purple-400/80 hover:text-purple-300 transition-all duration-300 font-mono tracking-wider hover:scale-105 border-t border-white/10 pt-6 mt-4"
               >
-                <Shield className="w-6 h-6 md:w-8 md:h-8" />
                 ADMIN PANEL
               </Link>
             )}
             
+            {/* Logout Button */}
             <button
               onClick={() => {
                 setMobileMenuOpen(false)
                 handleLogout()
               }}
-              className="mt-8 flex items-center gap-3 text-2xl md:text-4xl font-bold text-white/60 hover:text-red-400 transition-all duration-300 font-mono tracking-wider hover:scale-110"
+              className="text-3xl md:text-4xl font-bold text-white/60 hover:text-red-400 transition-all duration-300 font-mono tracking-wider hover:scale-105 mt-6"
             >
-              <LogOut className="w-6 h-6 md:w-8 md:h-8" />
               LOGOUT
             </button>
           </div>

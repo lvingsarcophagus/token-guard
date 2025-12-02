@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { adminAuth, adminDb } from '@/lib/firebase-admin'
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin'
 
 /**
  * POST /api/user/feature-preferences
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.split('Bearer ')[1]
+    const adminAuth = getAdminAuth()
     const decodedToken = await adminAuth.verifyIdToken(token)
     const userId = decodedToken.uid
 
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update user profile
+    const adminDb = getAdminDb()
     await adminDb.collection('users').doc(userId).update({
       featurePreferences: validPreferences,
       updatedAt: new Date().toISOString(),

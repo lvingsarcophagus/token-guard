@@ -245,7 +245,8 @@ export async function getHeliusEnhancedData(
 }
 
 /**
- * Get token holders using Helius RPC
+ * Get token holders using Helius getTokenAccounts RPC method
+ * Uses pagination to get accurate holder count for all tokens
  */
 async function getHeliusTokenHolders(tokenAddress: string, totalSupply?: number): Promise<{ count: number; topHolders: any[]; top10Percentage?: number; top50Percentage?: number; top100Percentage?: number } | null> {
   try {
@@ -254,76 +255,129 @@ async function getHeliusTokenHolders(tokenAddress: string, totalSupply?: number)
       return null;
     }
 
-    // Use getTokenAccounts RPC method to get holders
-    const response = await fetch(HELIUS_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 'helius-holders',
-        method: 'getTokenLargestAccounts',
-        params: [tokenAddress]
-      })
-    });
+    console.log(`[Helius] Fetching token holders for ${tokenAddress}`);
 
-    if (!response.ok) {
-      console.warn(`[Helius] Holder RPC request failed: ${response.status}`);
-      return null;
-    }
+    // Collect all token accounts with pagination
+    let page = 1;
+    let allTokenAccounts: any[] = [];
+    const maxPages = 20; // Limit to prevent excessive API calls (20k accounts max)
+    let hitLimit = false;
 
-    const data = await response.json();
-    
-    // Check for RPC errors
-    if (data.error) {
-      console.warn(`[Helius] RPC error: ${data.error.message}`);
-      return null;
-    }
-    
-    if (data.result && data.result.value && Array.isArray(data.result.value) && data.result.value.length > 0) {
-      const accounts = data.result.value;
-      
-      console.log(`[Helius] Found ${accounts.length} token holders`);
-      
-      // Calculate percentages if total supply is available
-      const topHolders = accounts.slice(0, 10).map((acc: any) => {
-        const balance = parseFloat(acc.amount) || 0;
-        const percentage = totalSupply && totalSupply > 0 ? (balance / totalSupply) * 100 : 0;
-        
-        return {
-          address: acc.address,
-          balance: balance,
-          percentage: percentage
-        };
+    while (page <= maxPages) {
+      const response = await fetch(HELIUS_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'helius-holders',
+          method: 'getTokenAccounts',
+          params: {
+            page: page,
+            limit: 1000,
+            displayOptions: {},
+            mint: tokenAddress
+          }
+        })
       });
 
-      // Calculate concentration metrics
-      let top10Percentage, top50Percentage, top100Percentage;
-      
-      if (totalSupply && totalSupply > 0) {
-        const top10Sum = accounts.slice(0, Math.min(10, accounts.length))
-          .reduce((sum: number, acc: any) => sum + (parseFloat(acc.amount) || 0), 0);
-        top10Percentage = (top10Sum / totalSupply) * 100;
-
-        const top50Sum = accounts.slice(0, Math.min(50, accounts.length))
-          .reduce((sum: number, acc: any) => sum + (parseFloat(acc.amount) || 0), 0);
-        top50Percentage = (top50Sum / totalSupply) * 100;
-
-        const top100Sum = accounts.slice(0, Math.min(100, accounts.length))
-          .reduce((sum: number, acc: any) => sum + (parseFloat(acc.amount) || 0), 0);
-        top100Percentage = (top100Sum / totalSupply) * 100;
+      if (!response.ok) {
+        console.warn(`[Helius] Holder RPC request failed: ${response.status}`);
+        break;
       }
+
+      const data = await response.json();
       
-      return {
-        count: accounts.length,
-        topHolders,
-        top10Percentage,
-        top50Percentage,
-        top100Percentage
-      };
+      // Check for RPC errors
+      if (data.error) {
+        console.warn(`[Helius] RPC error: ${data.error.message}`);
+        break;
+      }
+
+      // Check if we have results
+      if (!data.result || !data.result.token_accounts || data.result.token_accounts.length === 0) {
+        console.log(`[Helius] No more results at page ${page}`);
+        break;
+      }
+
+      console.log(`[Helius] Page ${page}: Found ${data.result.token_accounts.length} token accounts`);
+      allTokenAccounts.push(...data.result.token_accounts);
+
+      // If we got less than 1000, we've reached the end
+      if (data.result.token_accounts.length < 1000) {
+        break;
+      }
+
+      page++;
     }
 
-    console.warn('[Helius] No holder data returned from RPC');
-    return null;
+    // Check if we hit the pagination limit
+    if (page > maxPages) {
+      hitLimit = true;
+      console.log(`[Helius] Hit pagination limit at ${maxPages} pages (${allTokenAccounts.length} accounts)`);
+    }
+
+    if (allTokenAccounts.length === 0) {
+      console.warn('[Helius] No token accounts found');
+      return null;
+    }
+
+    // Group by owner to get unique holders and sum their balances
+    const holderMap = new Map<string, number>();
+    
+    allTokenAccounts.forEach((account: any) => {
+      const owner = account.owner;
+      const amount = parseFloat(account.amount) || 0;
+      
+      if (holderMap.has(owner)) {
+        holderMap.set(owner, holderMap.get(owner)! + amount);
+      } else {
+        holderMap.set(owner, amount);
+      }
+    });
+
+    // Convert to array and sort by balance (descending)
+    const holders = Array.from(holderMap.entries())
+      .map(([address, balance]) => ({ address, balance }))
+      .sort((a, b) => b.balance - a.balance);
+
+    const holderCount = holders.length;
+    console.log(`[Helius] Total unique holders: ${holderCount}${hitLimit ? ' (minimum, hit pagination limit)' : ''}`);
+
+    // Calculate percentages if total supply is available
+    const topHolders = holders.slice(0, 10).map((holder) => {
+      const percentage = totalSupply && totalSupply > 0 ? (holder.balance / totalSupply) * 100 : 0;
+      
+      return {
+        address: holder.address,
+        balance: holder.balance,
+        percentage: percentage
+      };
+    });
+
+    // Calculate concentration metrics
+    let top10Percentage, top50Percentage, top100Percentage;
+    
+    if (totalSupply && totalSupply > 0) {
+      const top10Sum = holders.slice(0, Math.min(10, holders.length))
+        .reduce((sum, holder) => sum + holder.balance, 0);
+      top10Percentage = (top10Sum / totalSupply) * 100;
+
+      const top50Sum = holders.slice(0, Math.min(50, holders.length))
+        .reduce((sum, holder) => sum + holder.balance, 0);
+      top50Percentage = (top50Sum / totalSupply) * 100;
+
+      const top100Sum = holders.slice(0, Math.min(100, holders.length))
+        .reduce((sum, holder) => sum + holder.balance, 0);
+      top100Percentage = (top100Sum / totalSupply) * 100;
+    }
+    
+    return {
+      count: holderCount,
+      topHolders,
+      top10Percentage,
+      top50Percentage,
+      top100Percentage
+    };
   } catch (error: any) {
     console.error('[Helius] Error fetching holders:', error.message);
     return null;
@@ -340,47 +394,18 @@ async function getHeliusTransactions(tokenAddress: string): Promise<{ count24h: 
       return null;
     }
 
-    // Get recent transactions for the token
-    const response = await fetch(
-      `${HELIUS_BASE_URL}/addresses/${tokenAddress}/transactions?api-key=${HELIUS_API_KEY}&limit=100`,
-      {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-
-    if (!response.ok) {
-      console.warn(`[Helius] Transaction API request failed: ${response.status}`);
-      return null;
-    }
-
-    const transactions = await response.json();
+    // NOTE: The /addresses/{address}/transactions endpoint returns transactions
+    // for the MINT ADDRESS itself (token creation events), not token transfers.
+    // For accurate token transaction counts, we would need DAS API or Enhanced Transactions
+    // which require paid Helius plans. For now, return null to let the system
+    // estimate from volume data (more accurate than mint address transactions).
     
-    if (!Array.isArray(transactions)) return null;
-
-    // Filter transactions from last 24 hours
-    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-    const recent24h = transactions.filter((tx: any) => {
-      const txTime = tx.timestamp ? tx.timestamp * 1000 : 0;
-      return txTime > oneDayAgo;
-    });
-
-    // Count unique traders
-    const uniqueAddresses = new Set<string>();
-    recent24h.forEach((tx: any) => {
-      if (tx.feePayer) uniqueAddresses.add(tx.feePayer);
-      if (tx.accountData) {
-        tx.accountData.forEach((acc: any) => {
-          if (acc.account) uniqueAddresses.add(acc.account);
-        });
-      }
-    });
-
-    return {
-      count24h: recent24h.length,
-      volume24h: 0, // Would need to parse transfer amounts
-      uniqueTraders24h: uniqueAddresses.size
-    };
+    console.log('[Helius] Token transaction history requires paid API tier - using volume estimation');
+    
+    return null;
+    
+    // FUTURE: When using paid Helius tier, implement proper token transfer tracking
+    // using Enhanced Transactions API or DAS getSignaturesForAsset
   } catch (error) {
     console.error('[Helius] Error fetching transactions:', error);
     return null;

@@ -1,0 +1,62 @@
+================================================================================
+MANUAL FIX REQUIRED: lib/data/chain-adaptive-fetcher.ts
+================================================================================
+
+LOCATION: Around line 448-463 in the fetchSolanaChainData function
+
+FIND THIS CODE (delete it):
+--------------------------------------------------------------------------------
+    // CRITICAL FIX: Helius only returns top 20 holders, not total count
+    // Estimate holder count from market cap for established tokens
+    let holderCount = heliusHolderCount
+    let holderCountEstimated = false
+    
+    if (heliusHolderCount <= 100 && marketData.marketCap > 10_000_000) {
+      // For tokens with >$10M market cap, estimate holders
+      // Rough formula: $10M = ~10k holders, $100M = ~80k holders
+      const estimatedHolders = Math.floor(Math.sqrt(marketData.marketCap / 1000) * 100)
+      holderCount = Math.max(estimatedHolders, heliusHolderCount)
+      holderCountEstimated = true
+      console.log(`📊 [Solana] Estimated ${holderCount.toLocaleString()} holders from ${(marketData.marketCap / 1e6).toFixed(2)}M market cap`)
+    } else if (marketData.holderCount > 0) {
+      holderCount = marketData.holderCount
+    }
+--------------------------------------------------------------------------------
+
+REPLACE WITH THIS CODE:
+--------------------------------------------------------------------------------
+    // Use Helius holder count directly (now accurate with pagination - up to 20k holders)
+    let holderCount = heliusHolderCount
+    let holderCountEstimated = false
+    
+    // Only estimate if Helius returns no data (0 holders)
+    if (heliusHolderCount === 0) {
+      if (marketData.marketCap > 10_000_000) {
+        // Estimate from market cap for large tokens
+        const estimatedHolders = Math.floor(Math.sqrt(marketData.marketCap / 1000) * 100)
+        holderCount = estimatedHolders
+        holderCountEstimated = true
+        console.log(`📊 [Solana] Estimated ${holderCount.toLocaleString()} holders from MC (Helius returned 0)`)
+      } else if (marketData.holderCount > 0) {
+        // Use Mobula data as fallback
+        holderCount = marketData.holderCount
+        holderCountEstimated = true
+        console.log(`📊 [Solana] Using Mobula holder count: ${holderCount.toLocaleString()}`)
+      }
+    } else {
+      // Use Helius data (accurate via pagination)
+      console.log(`✓ [Solana] Using Helius holder count: ${holderCount.toLocaleString()} (via pagination)`)
+    }
+--------------------------------------------------------------------------------
+
+WHAT THIS FIXES:
+- POPCAT will show 19,971 holders (not 20)
+- Pump.fun Rug detector won't trigger
+- Risk score will be ~24-30/100 (LOW) instead of 67/100 (HIGH)
+
+AFTER APPLYING:
+1. Save the file
+2. The Next.js dev server will auto-reload
+3. Scan POPCAT again to verify the fix
+
+================================================================================

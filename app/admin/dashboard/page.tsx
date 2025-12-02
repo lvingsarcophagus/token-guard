@@ -17,6 +17,7 @@ import {
 import Navbar from '@/components/navbar'
 import Loader from '@/components/loader'
 import { AdminPaymentsPanel } from '@/components/admin-payments-panel'
+import { AdminSmartAlertsPanel } from '@/components/admin-smart-alerts-panel'
 import { CacheViewer } from '@/components/admin-cache-viewer'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
@@ -51,7 +52,7 @@ export default function ModernAdminPanel() {
   const router = useRouter()
   const { isAdmin, loading: roleLoading } = useUserRole()
   
-  const [activeTab, setActiveTab] = useState<'users' | 'cache' | 'system' | 'analytics' | 'settings' | 'logs' | 'payments'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'cache' | 'system' | 'analytics' | 'settings' | 'logs' | 'payments' | 'alerts'>('users')
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -591,6 +592,20 @@ export default function ModernAdminPanel() {
             >
               <DollarSign className="w-5 h-5" />
               {activeTab === 'payments' && (
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-l-xl" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('alerts')}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all relative group ${
+                activeTab === 'alerts'
+                  ? 'bg-white text-black shadow-lg'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              }`}
+              title="Smart Alerts"
+            >
+              <Zap className="w-5 h-5" />
+              {activeTab === 'alerts' && (
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-l-xl" />
               )}
             </button>
@@ -1256,6 +1271,11 @@ export default function ModernAdminPanel() {
             {/* Payments Tab */}
             {activeTab === 'payments' && (
               <AdminPaymentsPanel />
+            )}
+
+            {/* Smart Alerts Tab */}
+            {activeTab === 'alerts' && (
+              <AdminSmartAlertsPanel />
             )}
           </div>
         </div>

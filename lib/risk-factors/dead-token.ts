@@ -47,11 +47,21 @@ export function checkDeadToken(data: DeadTokenCheckData): {
     }
   }
 
-  // HIGH: No transactions in 24h
+  // HIGH: No transactions in 24h (only if we have confirmed data AND other death signals)
+  // Don't trigger on default/missing tx data alone - require additional evidence
   if (data.txCount24h !== undefined && data.txCount24h === 0) {
-    reasons.push('Zero transactions in 24h')
-    baseScore = Math.max(baseScore, 90)
-    console.log(`[Dead Token Detector] 🚨 Zero transactions detected (liquidity: ${data.liquidityUSD ? '$' + (data.liquidityUSD / 1e6).toFixed(2) + 'M' : 'unknown'})`)
+    // Only flag as dead if ALSO has low liquidity OR low volume
+    const hasOtherDeathSignals = 
+      (data.liquidityUSD && data.liquidityUSD < 5000) || 
+      (data.volume24h && data.volume24h < 1000)
+    
+    if (hasOtherDeathSignals) {
+      reasons.push('Zero transactions in 24h')
+      baseScore = Math.max(baseScore, 90)
+      console.log(`[Dead Token Detector] 🚨 Zero transactions detected (liquidity: ${data.liquidityUSD ? '$' + (data.liquidityUSD / 1e6).toFixed(2) + 'M' : 'unknown'})`)
+    } else {
+      console.log(`[Dead Token Detector] ⚠️ Zero tx reported but liquidity/volume OK - likely data gap`)
+    }
   }
 
   // MEDIUM: Extreme price drops

@@ -1,11 +1,12 @@
 /**
  * Custom Loader Component
- * Sleek animated loader inspired by Tokenomics Lab branding
+ * Crypto-themed animated loader with blockchain symbols
  */
 
 'use client'
 
 import { motion } from 'framer-motion'
+import { Bitcoin, Coins, TrendingUp, Shield } from 'lucide-react'
 
 interface LoaderProps {
   size?: 'sm' | 'md' | 'lg' | 'xl'
@@ -22,59 +23,34 @@ export default function Loader({ size = 'md', text, fullScreen = false }: Loader
   }
 
   const dimension = sizes[size]
-
-  const containerVariants = {
-    animate: {
-      rotate: 360,
-      transition: {
-        duration: 2,
-        repeat: Infinity,
-        ease: "linear" as const
-      }
-    }
-  }
-
-  const dotVariants = {
-    animate: (i: number) => ({
-      scale: [1, 1.5, 1],
-      opacity: [0.3, 1, 0.3],
-      transition: {
-        duration: 1.5,
-        repeat: Infinity,
-        delay: i * 0.2,
-        ease: "easeInOut" as const
-      }
-    })
-  }
-
+  
   const content = (
     <div className="flex flex-col items-center justify-center gap-4">
-      {/* Animated Logo Loader */}
-      <motion.div
-        className="relative"
-        style={{ width: dimension, height: dimension }}
-        variants={containerVariants}
-        animate="animate"
-      >
-        {/* Outer Ring */}
+      {/* Main Loader Container */}
+      <div className="relative" style={{ width: dimension * 2, height: dimension * 2 }}>
+        {/* Outer Rotating Ring */}
         <motion.div
           className="absolute inset-0 rounded-full border-2 border-white/20"
           style={{
             borderTopColor: 'white',
             borderRightColor: 'white'
           }}
+          animate={{ rotate: 360 }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: "linear"
+          }}
         />
         
-        {/* Inner Ring */}
+        {/* Inner Counter-Rotating Ring */}
         <motion.div
-          className="absolute inset-2 rounded-full border-2 border-white/10"
-          animate={{
-            rotate: -360,
-            transition: {
-              duration: 3,
-              repeat: Infinity,
-              ease: "linear"
-            }
+          className="absolute inset-3 rounded-full border-2 border-white/10"
+          animate={{ rotate: -360 }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            ease: "linear"
           }}
           style={{
             borderBottomColor: 'rgba(255, 255, 255, 0.5)',
@@ -82,34 +58,61 @@ export default function Loader({ size = 'md', text, fullScreen = false }: Loader
           }}
         />
 
-        {/* Center Dots */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative" style={{ width: dimension * 0.4, height: dimension * 0.4 }}>
-            {[0, 1, 2, 3].map((i) => (
-              <motion.div
-                key={i}
-                className="absolute bg-white rounded-full"
-                style={{
-                  width: dimension * 0.12,
-                  height: dimension * 0.12,
-                  top: '50%',
-                  left: '50%',
-                  transform: `translate(-50%, -50%) rotate(${i * 90}deg) translateY(-${dimension * 0.15}px)`
-                }}
-                custom={i}
-                variants={dotVariants}
-                animate="animate"
-              />
-            ))}
-          </div>
-        </div>
+        {/* Crypto Symbols Orbiting */}
+        {[Bitcoin, Coins, TrendingUp, Shield].map((Icon, i) => (
+          <motion.div
+            key={i}
+            className="absolute"
+            style={{
+              top: '50%',
+              left: '50%',
+              width: dimension * 0.5,
+              height: dimension * 0.5
+            }}
+            animate={{ rotate: 360 }}
+            transition={{
+              duration: 4,
+              repeat: Infinity,
+              ease: "linear",
+              delay: 0
+            }}
+          >
+            <motion.div
+              className="absolute bg-white/5 backdrop-blur-sm rounded-full p-1.5 border border-white/20"
+              style={{
+                top: '50%',
+                left: '50%',
+                transform: `translate(-50%, -50%) rotate(${i * 90}deg) translateY(-${dimension * 0.85}px)`
+              }}
+              animate={{
+                scale: [1, 1.15, 1],
+                rotate: -360
+              }}
+              transition={{
+                scale: {
+                  duration: 2,
+                  repeat: Infinity,
+                  delay: i * 0.2,
+                  ease: "easeInOut"
+                },
+                rotate: {
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: "linear"
+                }
+              }}
+            >
+              <Icon className="w-4 h-4 text-white" strokeWidth={1.5} />
+            </motion.div>
+          </motion.div>
+        ))}
 
-        {/* Pulse Effect */}
+        {/* Center Pulse */}
         <motion.div
           className="absolute inset-0 rounded-full bg-white/5"
           animate={{
             scale: [1, 1.2, 1],
-            opacity: [0.5, 0, 0.5],
+            opacity: [0.5, 0, 0.5]
           }}
           transition={{
             duration: 2,
@@ -117,7 +120,23 @@ export default function Loader({ size = 'md', text, fullScreen = false }: Loader
             ease: "easeInOut"
           }}
         />
-      </motion.div>
+
+        {/* Center Dot */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            className="w-2 h-2 rounded-full bg-white"
+            animate={{
+              scale: [1, 1.5, 1],
+              opacity: [0.5, 1, 0.5]
+            }}
+            transition={{
+              duration: 1.5,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+        </div>
+      </div>
 
       {/* Loading Text */}
       {text && (

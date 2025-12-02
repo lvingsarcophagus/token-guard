@@ -12,8 +12,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
-  title: "Tokenomics Lab - Advanced Token Analytics & Risk Analysis",
-  description: "Professional tokenomics analysis with real-time risk assessment, security audits, and market intelligence",
+  title: "Tokenomics Lab - 10-Factor Risk Algorithm & Token Analysis",
+  description: "Proprietary 10-factor risk scoring algorithm for cryptocurrency tokens. Real-time security analysis, holder distribution, and liquidity assessment across 6+ blockchains.",
   generator: "v0.app",
   icons: {
     icon: '/favicon.ico',

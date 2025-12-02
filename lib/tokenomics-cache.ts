@@ -97,12 +97,23 @@ export async function setCachedTokenData(
       address: address.toLowerCase(),
       name: data.name || existingData?.name || 'Unknown',
       symbol: data.symbol || existingData?.symbol || 'N/A',
-      priceData: data.priceData || existingData?.priceData,
-      securityData: data.securityData || existingData?.securityData,
-      tokenomics: data.tokenomics || existingData?.tokenomics,
       chainId: data.chainId || existingData?.chainId || '1',
       lastUpdated: new Date().toISOString(),
       queryCount: (existingData?.queryCount || 0) + 1,
+    }
+
+    // Only add optional fields if they have values
+    if (data.priceData || existingData?.priceData) {
+      cacheData.priceData = data.priceData || existingData?.priceData
+    }
+    if (data.securityData || existingData?.securityData) {
+      cacheData.securityData = data.securityData || existingData?.securityData
+    }
+    if (data.tokenomics || existingData?.tokenomics) {
+      cacheData.tokenomics = data.tokenomics || existingData?.tokenomics
+    }
+    if (data.aiSummary || existingData?.aiSummary) {
+      cacheData.aiSummary = data.aiSummary || existingData?.aiSummary
     }
 
     await cacheRef.set(cacheData, { merge: true })
