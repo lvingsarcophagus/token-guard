@@ -61,12 +61,26 @@ export function useUserRole(): UserRoleData {
         
         if (userDoc.exists()) {
           const userData = userDoc.data()
-          const userRole = userData.role || 'user'
           
-          // Check if user is admin
-          const isAdminUser = userRole === 'admin' || !!userData.admin
+          // Check if user is admin (from role field)
+          const isAdminUser = userData.role === 'admin' || !!userData.admin
           
-          setRole(userRole.toUpperCase() as UserRole)
+          // Get user tier/plan (tier and plan should be in sync)
+          let userTier: UserRole = 'FREE'
+          
+          if (isAdminUser) {
+            userTier = 'ADMIN'
+          } else if (userData.tier) {
+            // Use tier field (uppercase: FREE, PREMIUM, ADMIN)
+            userTier = userData.tier.toUpperCase() as UserRole
+          } else if (userData.plan) {
+            // Fallback to plan field (uppercase: FREE, PREMIUM, PAY_PER_USE)
+            userTier = userData.plan.toUpperCase() as UserRole
+          }
+          
+          console.log('[useUserRole] User tier:', userTier, 'isAdmin:', isAdminUser, 'userData:', { tier: userData.tier, plan: userData.plan, role: userData.role })
+          
+          setRole(userTier)
           setIsAdmin(isAdminUser)
         } else {
           // New user - default to FREE

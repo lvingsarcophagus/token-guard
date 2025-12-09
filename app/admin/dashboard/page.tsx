@@ -387,9 +387,22 @@ export default function ModernAdminPanel() {
       
       const token = await user.getIdToken()
       
-      console.log('[Admin] Updating user:', selectedUser.uid, 'to tier:', editingTier)
+      console.log('[Admin] Updating user:', selectedUser.uid, 'to tier:', editingTier, 'role:', editingRole)
       
-      // Update tier/plan
+      // Prepare updates object
+      const updates: any = {
+        tier: editingTier,
+        plan: editingTier,  // Keep both in sync
+        role: editingRole
+      }
+      
+      // Add name if changed
+      if (editingName && editingName !== selectedUser.name) {
+        updates.name = editingName
+        updates.displayName = editingName
+      }
+      
+      // Update user
       const response = await fetch('/api/admin/users', {
         method: 'POST',
         headers: {
@@ -399,10 +412,7 @@ export default function ModernAdminPanel() {
         body: JSON.stringify({
           action: 'update',
           userId: selectedUser.uid,
-          updates: {
-            tier: editingTier,
-            plan: editingTier.toUpperCase()
-          }
+          updates
         })
       })
       
@@ -1428,7 +1438,7 @@ export default function ModernAdminPanel() {
                     onChange={(e) => setEditingRole(e.target.value)}
                     className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-white/40"
                   >
-                    <option value="free">USER</option>
+                    <option value="user">USER</option>
                     <option value="admin">ADMIN</option>
                   </select>
                 </div>
@@ -1439,8 +1449,9 @@ export default function ModernAdminPanel() {
                     onChange={(e) => setEditingTier(e.target.value)}
                     className="w-full bg-black border border-white/20 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-white/40"
                   >
-                    <option value="free">FREE</option>
-                    <option value="pro">PREMIUM</option>
+                    <option value="FREE">FREE</option>
+                    <option value="PREMIUM">PREMIUM</option>
+                    <option value="ADMIN">ADMIN</option>
                   </select>
                 </div>
                 <div className="flex gap-3 pt-4">

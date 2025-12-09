@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
-import { auth } from '@/lib/firebase'
+import { auth, db } from '@/lib/firebase'
 import Navbar from '@/components/navbar'
 import AIAnalysisAccordion from '@/components/ai-analysis-accordion'
 import { MorphingSquare } from '@/components/ui/morphing-square'
@@ -169,6 +169,46 @@ export default function PremiumDashboard() {
     }
     // No redirect - unified dashboard handles both free and premium users
   }, [user, userProfile, authLoading, router])
+  
+  // Automatic profile refresh every 30 seconds to detect admin upgrades
+  useEffect(() => {
+    if (!user) return
+    
+    const checkForUpgrade = async () => {
+      try {
+        const { getDoc, doc } = await import('firebase/firestore')
+        const userDoc = await getDoc(doc(db, 'users', user.uid))
+        
+        if (userDoc.exists()) {
+          const data = userDoc.data()
+          const newPlan = data.plan || data.tier
+          const currentPlan = userProfile?.plan
+          
+          console.log('[Dashboard] Profile check:', { 
+            currentPlan, 
+            newPlan, 
+            changed: newPlan !== currentPlan 
+          })
+          
+          // If plan changed to PREMIUM, reload the page
+          if (newPlan === 'PREMIUM' && currentPlan !== 'PREMIUM') {
+            console.log('[Dashboard] ✅ Upgrade detected! Reloading page...')
+            window.location.reload()
+          }
+        }
+      } catch (error) {
+        console.error('[Dashboard] Profile check error:', error)
+      }
+    }
+    
+    // Check immediately on mount
+    checkForUpgrade()
+    
+    // Then check every 30 seconds
+    const refreshInterval = setInterval(checkForUpgrade, 30000)
+    
+    return () => clearInterval(refreshInterval)
+  }, [user, userProfile?.plan])
   
   // Determine if user has premium features (PREMIUM or PAY_PER_USE)
   const isPremium = userProfile?.plan === 'PREMIUM' || userProfile?.plan === 'PAY_PER_USE'
