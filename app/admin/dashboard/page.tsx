@@ -512,8 +512,8 @@ export default function ModernAdminPanel() {
       <Navbar />
       <div className="min-h-screen bg-black pt-20">
         <div className="flex">
-          {/* Modern Floating Sidebar - Hidden on mobile, visible on desktop */}
-          <div className="hidden md:flex w-20 fixed left-4 top-24 bottom-4 bg-black/60 backdrop-blur-xl border border-white/20 rounded-2xl flex-col items-center py-6 gap-2 z-40 shadow-2xl">
+          {/* Modern Floating Sidebar - Hidden on mobile, visible on lg screens */}
+          <div className="hidden lg:flex w-20 fixed left-4 top-24 bottom-4 bg-black/60 backdrop-blur-xl border border-white/20 rounded-2xl flex-col items-center py-6 gap-2 z-40 shadow-2xl">
             <button
               onClick={() => setActiveTab('users')}
               className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all relative group ${
@@ -629,9 +629,9 @@ export default function ModernAdminPanel() {
           </div>
 
           {/* Main Content - Responsive margins */}
-          <div className="flex-1 md:ml-28 ml-0 mr-4 p-4 md:p-8">
-            {/* Mobile Tab Navigation */}
-            <div className="md:hidden mb-6 overflow-x-auto">
+          <div className="flex-1 lg:ml-28 ml-0 p-4 lg:p-8">
+            {/* Mobile Tab Navigation - Horizontal scroll */}
+            <div className="lg:hidden mb-6 overflow-x-auto -mx-4 px-4">
               <div className="flex gap-2 min-w-max pb-2">
                 {[
                   { id: 'users', icon: Users, label: 'Users' },
@@ -660,85 +660,85 @@ export default function ModernAdminPanel() {
             </div>
             
             {/* Header */}
-            <div className="mb-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+            <div className="mb-6 lg:mb-8">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 lg:mb-6 gap-3">
                 <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <Shield className="w-6 h-6 text-white" />
-                    <h1 className="text-xl md:text-2xl font-bold text-white font-mono tracking-wider">
-                      Admin Control Panel
+                  <div className="flex items-center gap-2 lg:gap-3 mb-1 lg:mb-2">
+                    <Shield className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
+                    <h1 className="text-lg lg:text-2xl font-bold text-white font-mono tracking-wider">
+                      Admin Panel
                     </h1>
                   </div>
-                  <p className="text-white/60 text-xs md:text-sm font-mono">SYSTEM ADMINISTRATOR • ALL ACCESS</p>
+                  <p className="text-white/60 text-[10px] lg:text-sm font-mono">SYSTEM ADMINISTRATOR</p>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                  <span className="text-green-500 text-xs font-mono font-bold">OPERATIONAL</span>
+                <div className="flex items-center gap-2 px-2 lg:px-3 py-1 lg:py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 self-start">
+                  <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-green-500 animate-pulse"></div>
+                  <span className="text-green-500 text-[10px] lg:text-xs font-mono font-bold">OPERATIONAL</span>
                 </div>
               </div>
 
-              {/* Stats Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                <div className="bg-black border border-white/10 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-white/60 text-xs font-mono uppercase">Total Users</span>
-                    <Users className="w-5 h-5 text-white/40" />
+              {/* Stats Cards - Mobile optimized */}
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 lg:gap-4">
+                <div className="bg-black border border-white/10 rounded-xl p-3 lg:p-6">
+                  <div className="flex items-center justify-between mb-2 lg:mb-4">
+                    <span className="text-white/60 text-[10px] lg:text-xs font-mono uppercase">Total Users</span>
+                    <Users className="w-4 h-4 lg:w-5 lg:h-5 text-white/40" />
                   </div>
-                  <div className="text-3xl font-bold text-white font-mono">{stats.totalUsers}</div>
-                  <div className="text-green-500 text-xs font-mono mt-2">
-                    ↑ {stats.totalUsers > 0 ? '0 active (24h)' : '0 active'}
+                  <div className="text-2xl lg:text-3xl font-bold text-white font-mono">{stats.totalUsers}</div>
+                  <div className="text-green-500 text-[10px] lg:text-xs font-mono mt-1 lg:mt-2">
+                    ↑ {stats.totalUsers > 0 ? '0 active' : '0'}
                   </div>
                 </div>
 
-                <div className="bg-black border border-white/10 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-white/60 text-xs font-mono uppercase">Premium Users</span>
-                    <TrendingUp className="w-5 h-5 text-white/40" />
+                <div className="bg-black border border-white/10 rounded-xl p-3 lg:p-6">
+                  <div className="flex items-center justify-between mb-2 lg:mb-4">
+                    <span className="text-white/60 text-[10px] lg:text-xs font-mono uppercase">Premium</span>
+                    <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5 text-white/40" />
                   </div>
-                  <div className="text-3xl font-bold text-white font-mono">{stats.premiumUsers}</div>
-                  <div className="text-white/50 text-xs font-mono mt-2">
+                  <div className="text-2xl lg:text-3xl font-bold text-white font-mono">{stats.premiumUsers}</div>
+                  <div className="text-white/50 text-[10px] lg:text-xs font-mono mt-1 lg:mt-2">
                     {stats.totalUsers > 0 ? `${((stats.premiumUsers / stats.totalUsers) * 100).toFixed(1)}%` : '0%'}
                   </div>
                 </div>
 
-                <div className="bg-black border border-blue-500/20 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-blue-400 text-xs font-mono uppercase">Pay-Per-Use</span>
-                    <Zap className="w-5 h-5 text-blue-400" />
+                <div className="bg-black border border-blue-500/20 rounded-xl p-3 lg:p-6">
+                  <div className="flex items-center justify-between mb-2 lg:mb-4">
+                    <span className="text-blue-400 text-[10px] lg:text-xs font-mono uppercase">Pay/Use</span>
+                    <Zap className="w-4 h-4 lg:w-5 lg:h-5 text-blue-400" />
                   </div>
-                  <div className="text-3xl font-bold text-white font-mono">{stats.payPerUseUsers}</div>
-                  <div className="text-blue-400 text-xs font-mono mt-2">
+                  <div className="text-2xl lg:text-3xl font-bold text-white font-mono">{stats.payPerUseUsers}</div>
+                  <div className="text-blue-400 text-[10px] lg:text-xs font-mono mt-1 lg:mt-2">
                     {stats.totalUsers > 0 ? `${((stats.payPerUseUsers / stats.totalUsers) * 100).toFixed(1)}%` : '0%'}
                   </div>
                 </div>
 
-                <div className="bg-black border border-blue-500/20 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-blue-400 text-xs font-mono uppercase">Total Credits</span>
-                    <Zap className="w-5 h-5 text-blue-400" />
+                <div className="bg-black border border-blue-500/20 rounded-xl p-3 lg:p-6">
+                  <div className="flex items-center justify-between mb-2 lg:mb-4">
+                    <span className="text-blue-400 text-[10px] lg:text-xs font-mono uppercase">Credits</span>
+                    <Zap className="w-4 h-4 lg:w-5 lg:h-5 text-blue-400" />
                   </div>
-                  <div className="text-3xl font-bold text-white font-mono">{stats.totalCredits}</div>
-                  <div className="text-white/50 text-xs font-mono mt-2">
-                    ${(stats.totalCredits * 0.10).toFixed(2)} value
+                  <div className="text-2xl lg:text-3xl font-bold text-white font-mono">{stats.totalCredits}</div>
+                  <div className="text-white/50 text-[10px] lg:text-xs font-mono mt-1 lg:mt-2">
+                    ${(stats.totalCredits * 0.10).toFixed(2)}
                   </div>
                 </div>
 
-                <div className="bg-black border border-white/10 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-white/60 text-xs font-mono uppercase">Cached Tokens</span>
-                    <Database className="w-5 h-5 text-white/40" />
+                <div className="bg-black border border-white/10 rounded-xl p-3 lg:p-6">
+                  <div className="flex items-center justify-between mb-2 lg:mb-4">
+                    <span className="text-white/60 text-[10px] lg:text-xs font-mono uppercase">Cached</span>
+                    <Database className="w-4 h-4 lg:w-5 lg:h-5 text-white/40" />
                   </div>
-                  <div className="text-3xl font-bold text-white font-mono">{stats.cachedTokens}</div>
-                  <div className="text-white/50 text-xs font-mono mt-2">158 total queries</div>
+                  <div className="text-2xl lg:text-3xl font-bold text-white font-mono">{stats.cachedTokens}</div>
+                  <div className="text-white/50 text-[10px] lg:text-xs font-mono mt-1 lg:mt-2">158 queries</div>
                 </div>
 
-                <div className="bg-black border border-white/10 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-white/60 text-xs font-mono uppercase">Queries (24h)</span>
-                    <Activity className="w-5 h-5 text-white/40" />
+                <div className="bg-black border border-white/10 rounded-xl p-3 lg:p-6">
+                  <div className="flex items-center justify-between mb-2 lg:mb-4">
+                    <span className="text-white/60 text-[10px] lg:text-xs font-mono uppercase">24h</span>
+                    <Activity className="w-4 h-4 lg:w-5 lg:h-5 text-white/40" />
                   </div>
-                  <div className="text-3xl font-bold text-white font-mono">{stats.queries24h}</div>
-                  <div className="text-white/50 text-xs font-mono mt-2">0/hour avg</div>
+                  <div className="text-2xl lg:text-3xl font-bold text-white font-mono">{stats.queries24h}</div>
+                  <div className="text-white/50 text-[10px] lg:text-xs font-mono mt-1 lg:mt-2">0/hr avg</div>
                 </div>
               </div>
             </div>
@@ -748,20 +748,20 @@ export default function ModernAdminPanel() {
             {/* User Management Tab */}
             {activeTab === 'users' && (
               <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-bold text-white font-mono flex items-center gap-2">
-                    <Users className="w-5 h-5" />
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 lg:mb-6 gap-3">
+                  <h2 className="text-base lg:text-lg font-bold text-white font-mono flex items-center gap-2">
+                    <Users className="w-4 h-4 lg:w-5 lg:h-5" />
                     User Management
                   </h2>
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 lg:gap-3">
+                    <div className="relative flex-1 sm:flex-initial">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                       <input
                         type="text"
-                        placeholder="Search users..."
+                        placeholder="Search..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 pr-4 py-2 bg-black border border-white/20 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-white/40 w-64"
+                        className="w-full pl-10 pr-4 py-2 bg-black border border-white/20 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-white/40 sm:w-48 lg:w-64"
                       />
                     </div>
                     <button
@@ -770,17 +770,18 @@ export default function ModernAdminPanel() {
                         loadAdminData()
                       }}
                       disabled={loading}
-                      className="px-4 py-2 rounded-lg border border-white/20 text-white/70 hover:text-white hover:bg-white/5 transition-all text-sm font-mono flex items-center gap-2 disabled:opacity-50"
+                      className="px-4 py-2 rounded-lg border border-white/20 text-white/70 hover:text-white hover:bg-white/5 transition-all text-sm font-mono flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                      REFRESH
+                      <span className="hidden sm:inline">REFRESH</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Users Table */}
+                {/* Users Table - Responsive */}
                 <div className="bg-black border border-white/10 rounded-xl overflow-hidden">
-                  <table className="w-full">
+                  <div className="overflow-x-auto">
+                  <table className="w-full min-w-[800px]">
                     <thead>
                       <tr className="border-b border-white/10">
                         <th className="text-left px-6 py-4 text-white/60 font-mono text-xs uppercase">Name</th>
@@ -864,6 +865,7 @@ export default function ModernAdminPanel() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   {filteredUsers.length === 0 && (
                     <div className="text-center py-12 text-white/40 font-mono text-sm">
                       No users found

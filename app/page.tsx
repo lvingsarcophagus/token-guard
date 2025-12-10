@@ -14,6 +14,8 @@ const GenerativeArtScene = dynamic(
   { ssr: false }
 )
 
+
+
 export default function LandingPage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-black">
@@ -30,6 +32,8 @@ export default function LandingPage() {
           <GenerativeArtScene />
         </Suspense>
       </div>
+
+
 
       {/* Animated gradient overlay */}
       <div className="fixed inset-0 pointer-events-none">

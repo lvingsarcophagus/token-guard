@@ -143,6 +143,14 @@ export default function Navbar() {
                 </div>
               </Link>
 
+              {/* Login Button (Desktop) */}
+              <Link href="/login" className="hidden sm:block">
+                <button className="px-4 py-2 rounded-xl border border-white/30 hover:border-white/40 bg-black/40 hover:bg-white/10 backdrop-blur-md transition-all duration-300 h-9 flex items-center gap-2">
+                  <User className="w-4 h-4 text-white/60" />
+                  <span className="text-xs font-mono text-white/70 font-bold tracking-wider">LOGIN</span>
+                </button>
+              </Link>
+
               {/* Hamburger Menu Button */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -191,11 +199,20 @@ export default function Navbar() {
                   {link.label.toUpperCase()}
                 </Link>
               ))}
-              <Link href="/signup" onClick={() => setMobileMenuOpen(false)}>
-                <button className="mt-8 px-8 py-4 rounded-xl border-2 border-white/30 bg-white/10 hover:bg-white hover:text-black text-white transition-all duration-300 font-mono text-lg font-bold tracking-wider hover:scale-110">
-                  SIGN UP
-                </button>
-              </Link>
+              
+              {/* Login & Sign Up Buttons */}
+              <div className="flex flex-col gap-4 mt-8">
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+                  <button className="px-8 py-4 rounded-xl border-2 border-white/30 bg-black/40 hover:bg-white/10 text-white transition-all duration-300 font-mono text-lg font-bold tracking-wider hover:scale-110">
+                    LOGIN
+                  </button>
+                </Link>
+                <Link href="/signup" onClick={() => setMobileMenuOpen(false)}>
+                  <button className="px-8 py-4 rounded-xl border-2 border-white/30 bg-white/10 hover:bg-white hover:text-black text-white transition-all duration-300 font-mono text-lg font-bold tracking-wider hover:scale-110">
+                    SIGN UP
+                  </button>
+                </Link>
+              </div>
             </div>
           </div>
         )}
@@ -273,6 +290,7 @@ export default function Navbar() {
                     <span className="absolute -top-1 -right-1 text-[10px]">⚡</span>
                   )}
                 </button>
+
                 {/* Hamburger Menu Button */}
                 <button
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -292,7 +310,7 @@ export default function Navbar() {
                   </div>
                 </button>
 
-                {/* User Menu Dropdown (Hidden - now in fullscreen menu) */}
+              {/* User Menu Dropdown (Hidden - now in fullscreen menu) */}
                 <div className="relative user-menu-container hidden">
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -375,25 +393,6 @@ export default function Navbar() {
                   )}
                 </div>
               </div>
-
-              {/* Mobile Menu Button */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-xl border border-white/30 hover:border-white/40 bg-black/40 hover:bg-white/10 backdrop-blur-md transition-all duration-300 h-10 w-10 flex items-center justify-center"
-                aria-label="Toggle menu"
-              >
-                <div className="relative w-5 h-4 flex flex-col justify-between">
-                  <span className={`block h-0.5 w-full bg-white rounded-full transition-all duration-300 ${
-                    mobileMenuOpen ? 'rotate-45 translate-y-[7px]' : ''
-                  }`}></span>
-                  <span className={`block h-0.5 w-full bg-white rounded-full transition-all duration-300 ${
-                    mobileMenuOpen ? 'opacity-0 scale-0' : 'opacity-100'
-                  }`}></span>
-                  <span className={`block h-0.5 w-full bg-white rounded-full transition-all duration-300 ${
-                    mobileMenuOpen ? '-rotate-45 -translate-y-[7px]' : ''
-                  }`}></span>
-                </div>
-              </button>
             </div>
           </div>
         </div>

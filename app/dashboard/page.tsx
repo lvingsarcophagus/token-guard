@@ -162,17 +162,29 @@ export default function PremiumDashboard() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
   
-  // Check authentication and redirect FREE users to free dashboard
+  // Check authentication and redirect unauthenticated users
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (!authLoading && !user && !hasReloaded) {
+      console.log('[Dashboard] No user found, redirecting to login')
       router.push('/login')
     }
     // No redirect - unified dashboard handles both free and premium users
-  }, [user, userProfile, authLoading, router])
+  }, [user, authLoading, router, hasReloaded])
   
-  // Automatic profile refresh to detect admin upgrades
+  // Automatic profile refresh to detect admin upgrades (with reload prevention)
+  const [lastKnownTier, setLastKnownTier] = useState<string | null>(null)
+  const [hasReloaded, setHasReloaded] = useState(false)
+  
   useEffect(() => {
-    if (!user) return
+    if (!user || !userProfile) return
+    
+    // Initialize lastKnownTier on first load
+    if (lastKnownTier === null) {
+      const currentTier = userProfile.plan?.toUpperCase() || 'FREE'
+      setLastKnownTier(currentTier)
+      console.log('[Dashboard] Initial tier set:', currentTier)
+      return
+    }
     
     const checkForUpgrade = async () => {
       try {
@@ -181,23 +193,29 @@ export default function PremiumDashboard() {
         
         if (userDoc.exists()) {
           const data = userDoc.data()
-          const newTier = data.tier?.toUpperCase()
-          const currentTier = userProfile?.tier?.toUpperCase()
+          const newTier = data.plan?.toUpperCase() || 'FREE'
+          const currentTier = lastKnownTier
           
           console.log('[Dashboard] Profile check:', { 
             currentTier, 
             newTier,
+            hasReloaded,
             isPremiumNow: newTier === 'PREMIUM' || newTier === 'PRO',
             wasPremium: currentTier === 'PREMIUM' || currentTier === 'PRO'
           })
           
-          // If tier changed to PREMIUM/PRO, reload the page
+          // Only reload if tier actually changed to premium AND we haven't already reloaded
           const isPremiumNow = newTier === 'PREMIUM' || newTier === 'PRO'
           const wasPremium = currentTier === 'PREMIUM' || currentTier === 'PRO'
           
-          if (isPremiumNow && !wasPremium) {
+          if (isPremiumNow && !wasPremium && !hasReloaded && newTier !== currentTier) {
             console.log('[Dashboard] ✅ Upgrade to PREMIUM detected! Reloading page...')
+            setHasReloaded(true) // Prevent multiple reloads
             window.location.reload()
+          } else if (newTier !== currentTier) {
+            // Update tier without reload for other changes
+            setLastKnownTier(newTier)
+            console.log('[Dashboard] Tier updated without reload:', currentTier, '->', newTier)
           }
         }
       } catch (error) {
@@ -205,16 +223,16 @@ export default function PremiumDashboard() {
       }
     }
     
-    // Check immediately on mount
-    checkForUpgrade()
-    
-    // Check every 10 seconds (faster detection)
-    const refreshInterval = setInterval(checkForUpgrade, 10000)
+    // Don't check immediately on mount to prevent initial reload
+    // Check every 15 seconds (reduced frequency)
+    const refreshInterval = setInterval(checkForUpgrade, 15000)
     
     // Also check when page gains focus (user switches back to tab)
     const handleFocus = () => {
-      console.log('[Dashboard] Page focused, checking for updates...')
-      checkForUpgrade()
+      if (!hasReloaded) {
+        console.log('[Dashboard] Page focused, checking for updates...')
+        checkForUpgrade()
+      }
     }
     window.addEventListener('focus', handleFocus)
     
@@ -222,7 +240,7 @@ export default function PremiumDashboard() {
       clearInterval(refreshInterval)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [user, userProfile?.plan])
+  }, [user, userProfile, lastKnownTier, hasReloaded])
   
   // Determine if user has premium features (PREMIUM or PAY_PER_USE)
   const userTier = userProfile?.tier?.toUpperCase() || 'FREE'
